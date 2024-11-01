@@ -1,0 +1,3 @@
+[submodule "catkin_ws/src/abb_egm_rws_managers"]
+	path = catkin_ws/src/abb_egm_rws_managers
+	url = https://github.com/ros-industrial/abb_egm_rws_managers.git
