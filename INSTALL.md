@@ -20,7 +20,7 @@ wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforg
 bash Miniforge3-$(uname)-$(uname -m).sh
 ```
 
-## create Mamba-Forge ROS noetic environment
+## Create Mamba-Forge environment
 ```bash
 mamba create -n yumiegmros python=3.11
 mamba activate yumiegmros
@@ -34,7 +34,7 @@ conda config --env --add channels robostack-staging
 # remove the defaults channel just in case, this might return an error if it is not in the list which is ok
 conda config --env --remove channels defaults
 ```
-# Install ros-noetic into the environment (ROS1)
+# Install ROS Noetic into the environment
 ```bash
 mamba install ros-noetic-desktop
 mamba deactivate
@@ -49,19 +49,13 @@ mamba activate yumiegmros
 roscore
 ```
 
-## Install abb-robot-driver and dependencies
+## Install ABB Robot Driver and dependencies
 
 ### Building the Packages
-
-The following instructions should build the main branches of all required repositories on a ROS Melodic system:
 
 ```bash
 # Change to the root of the Catkin workspace.
 cd ~/yumi_ros_noetic/catkin_ws/src
-
-# Check build dependencies.
-# First update the local rosdep database.
-rosdep update
 
 git clone https://github.com/ros-industrial/abb_robot_driver_interfaces.git
 
