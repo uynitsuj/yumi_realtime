@@ -1,4 +1,4 @@
-# yumi_ros_noetic
+# YuMi ROS Noetic Interface
 
 ## Installation
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
