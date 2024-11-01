@@ -1,4 +1,4 @@
-## Installation
+# Installation
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
 ```
@@ -34,7 +34,7 @@ conda config --env --add channels robostack-staging
 # remove the defaults channel just in case, this might return an error if it is not in the list which is ok
 conda config --env --remove channels defaults
 ```
-# Install ROS Noetic into the environment
+## Install ROS Noetic into the environment
 ```bash
 mamba install ros-noetic-desktop
 mamba deactivate
@@ -43,11 +43,12 @@ mamba activate yumiegmros
 mamba install compilers cmake pkg-config make ninja colcon-common-extensions catkin_tools rosdep
 ```
 
-#### Test mamba-forge ros installation
+### Test mamba-forge ros installation
 ```bash
 mamba activate yumiegmros
 roscore
 ```
+Should start a roscore instance
 
 ## Install ABB Robot Driver and dependencies
 
@@ -72,7 +73,7 @@ Finally, activate the workspace to get access to the packages just built:
 source ~/yumi_ros_noetic/catkin_ws/devel_isolated/setup.bash
 ```
 
-### Test YuMi launch
+## Test YuMi launch
 ```bash
 roslaunch abb_robot_bringup yumi_robot.launch
 ```
