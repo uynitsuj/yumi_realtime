@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yumi_ros_noetic"
+version = "0.0.1"
+description = "YuMi Externally Guided Motion (EGM) wrapper interfaced with ROS noetic"
+authors = [
+    {name = "Justin Yu", email = "yujustin@berkeley.edu"},
+]
+license = {text = "MIT Software License"}
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    #"autolab-core",
+    "viser"
+    "tyro"
+]
+
+[tool.setuptools]
+packages = ["yumi_ros_noetic"]

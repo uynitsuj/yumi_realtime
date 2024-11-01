@@ -82,13 +82,16 @@ source ~/yumi_ros_noetic/catkin_ws/devel_isolated/setup.bash
 
 ### Test YuMi launch
 ```bash
-roslaunch abb_robot_bringup_examples ex3_rws_and_egm_yumi_robot.launch robot_ip:=<robot_ip>
+roslaunch abb_robot_bringup yumi_robot.launch
 ```
 
-if linking issues with libabb_libegm.so or libprotobuf.so occur try something like...
-```
+### Install Issues
+If linking issues with libabb_libegm.so or libprotobuf.so occur try adding to the launch file with something like...
+```bash
 <?xml version="1.0"?>
 <launch>
+
+  # export paths to shared libraries in 
   <env name="LD_LIBRARY_PATH" value="/home/<user>/catkin_ws/devel_isolated/abb_libegm/lib:/home/<user>/miniforge3/envs/yumiegmros/lib:${LD_LIBRARY_PATH}" />
   <arg name="robot_ip" doc="The robot controller's IP address"/>
 ```
