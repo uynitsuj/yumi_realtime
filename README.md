@@ -4,6 +4,7 @@
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
 ```
+cd ~/
 git clone --recurse-submodules https://github.com/uynitsuj/yumi_ros_noetic.git
 ```
 
