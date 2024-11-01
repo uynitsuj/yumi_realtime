@@ -29,6 +29,7 @@ from datetime import datetime
 import rospy
 from sensor_msgs.msg import JointState # sensor message type
 # import abb_robot_driver_interfaces.abb_robot_msgs as robot_msgs # interface message type
+from abb_robot_msgs.srv import GetIOSignal
 
 YUMI_REST_POSE = {
     "yumi_joint_1_r": 1.21442839,
@@ -86,7 +87,13 @@ def main() -> None:
     server = viser.ViserServer()
     
     def callback(data):
-
+        get_io_signal = rospy.ServiceProxy('yumi/rws/get_io_signal', GetIOSignal)
+        
+        gripper_L = get_io_signal("hand_ActualPosition_L")
+        gripper_R = get_io_signal("hand_ActualPosition_R")
+        # print("Gripper L: ", gripper_L)
+        # print("Gripper R: ", gripper_R)
+        
         YUMI_POSE = {
             "yumi_joint_1_r": data.position[0],
             "yumi_joint_2_r": data.position[1],
@@ -102,8 +109,8 @@ def main() -> None:
             "yumi_joint_4_l": data.position[11],
             "yumi_joint_5_l": data.position[12],
             "yumi_joint_6_l": data.position[13],
-            "gripper_r_joint": 0,
-            "gripper_l_joint": 0,
+            "gripper_r_joint": int(gripper_R.value)/10000,
+            "gripper_l_joint": int(gripper_L.value)/10000,
         }
         viser_urdf.update_cfg(YUMI_POSE)
         print(YUMI_POSE)
