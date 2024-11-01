@@ -3,6 +3,10 @@
 ## Installation
 Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
+```
+git clone --recurse-submodules https://github.com/uynitsuj/yumi_ros_noetic.git
+```
+
 ## Install Mamba-Forge
 Install mamba-forge
 Download the installer using curl or wget or your favorite program and run the script.
