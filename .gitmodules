@@ -16,3 +16,6 @@
 [submodule "dependencies/jaxls"]
 	path = dependencies/jaxls
 	url = https://github.com/chungmin99/jaxls/commits/py310/
+[submodule "dependencies/jaxmp"]
+	path = dependencies/jaxmp
+	url = https://github.com/uynitsuj/jaxmp
