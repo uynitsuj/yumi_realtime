@@ -1,0 +1,20 @@
+[100%] Built target abb_egm_rws_managers
+[36mInstall the project...[0m
+-- Install configuration: "RelWithDebInfo"
+-- Up-to-date: /home/xi/yumi_ros_noetic/catkin_ws/devel/include
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/rws_manager.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/system_data_parser.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/data_containers.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/egm_manager.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/utilities.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/robot_controller_description.proto
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/robot_controller_description.pb.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/abb_egm_rws_managers_export.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_rws_managers/abb_egm_rws_managersConfig.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_rws_managers/abb_egm_rws_managersConfigVersion.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_rws_managers/package.xml
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_rws_managers.so
+-- Set non-toolchain portion of runtime path of "/home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_rws_managers.so" to ""
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_rws_managers/abb_egm_rws_managersTargets.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_rws_managers/abb_egm_rws_managersTargets-relwithdebinfo.cmake

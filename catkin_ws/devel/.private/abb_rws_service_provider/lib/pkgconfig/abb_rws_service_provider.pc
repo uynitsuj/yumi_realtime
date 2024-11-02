@@ -1,0 +1,8 @@
+prefix=/home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_rws_service_provider
+
+Name: abb_rws_service_provider
+Description: Description of abb_rws_service_provider
+Version: 0.5.0
+Cflags: -I/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/include
+Libs: -L${prefix}/lib -labb_rws_service_provider /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_rws_managers.so
+Requires: abb_rapid_sm_addin_msgs abb_robot_cpp_utilities abb_robot_msgs roscpp

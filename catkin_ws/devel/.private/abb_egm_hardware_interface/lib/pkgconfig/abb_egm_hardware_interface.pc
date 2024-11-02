@@ -1,0 +1,8 @@
+prefix=/home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_egm_hardware_interface
+
+Name: abb_egm_hardware_interface
+Description: Description of abb_egm_hardware_interface
+Version: 0.5.0
+Cflags: -I/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_egm_hardware_interface/include -I/home/xi/yumi_ros_noetic/catkin_ws/devel/include -I/home/xi/miniforge3/envs/yumiegmros/include
+Libs: -L${prefix}/lib -labb_egm_hardware_interface_hardware_interface -labb_egm_hardware_interface_controller_stopper /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_rws_managers.so /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_libegm.so /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_librws.so /home/xi/miniforge3/envs/yumiegmros/lib/libboost_regex.so.1.82.0 /home/xi/miniforge3/envs/yumiegmros/lib/libboost_system.so.1.82.0 /home/xi/miniforge3/envs/yumiegmros/lib/libboost_thread.so.1.82.0 /home/xi/miniforge3/envs/yumiegmros/lib/libPocoFoundation.so /home/xi/miniforge3/envs/yumiegmros/lib/libPocoNet.so /home/xi/miniforge3/envs/yumiegmros/lib/libPocoUtil.so /home/xi/miniforge3/envs/yumiegmros/lib/libPocoXML.so -ldl /home/xi/miniforge3/envs/yumiegmros/lib/libprotobuf.so -lpthread
+Requires: abb_robot_cpp_utilities abb_robot_msgs controller_manager controller_manager_msgs hardware_interface roscpp

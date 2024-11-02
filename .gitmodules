@@ -13,3 +13,6 @@
 [submodule "catkin_ws/src/abb_robot_driver"]
 	path = catkin_ws/src/abb_robot_driver
 	url = https://github.com/uynitsuj/abb_robot_driver.git
+[submodule "dependencies/jaxls"]
+	path = dependencies/jaxls
+	url = https://github.com/chungmin99/jaxls/commits/py310/

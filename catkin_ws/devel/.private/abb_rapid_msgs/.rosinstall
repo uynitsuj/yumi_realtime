@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_rapid_msgs/setup.sh

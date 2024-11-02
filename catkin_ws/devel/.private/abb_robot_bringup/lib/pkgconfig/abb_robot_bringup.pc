@@ -1,0 +1,8 @@
+prefix=/home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_robot_bringup
+
+Name: abb_robot_bringup
+Description: Description of abb_robot_bringup
+Version: 0.5.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: abb_egm_hardware_interface abb_egm_state_controller abb_rws_service_provider abb_rws_state_publisher controller_manager joint_state_controller velocity_controllers

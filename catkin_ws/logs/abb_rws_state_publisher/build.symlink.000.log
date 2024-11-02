@@ -1,0 +1,5 @@
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_rws_state_publisher/cmake/abb_rws_state_publisherConfig-version.cmake
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_rws_state_publisher/cmake/abb_rws_state_publisherConfig.cmake
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_rws_state_publisher.so
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/pkgconfig/abb_rws_state_publisher.pc
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/abb_rws_state_publisher/rws_state_publisher

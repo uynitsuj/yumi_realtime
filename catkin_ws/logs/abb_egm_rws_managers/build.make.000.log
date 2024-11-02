@@ -1,0 +1,18 @@
+[ 14%] [34m[1mRunning cpp protocol buffer compiler on proto/robot_controller_description.proto[0m
+[ 28%] [32mBuilding CXX object CMakeFiles/abb_egm_rws_managers.dir/src/egm_manager.cpp.o[0m
+[ 42%] [32mBuilding CXX object CMakeFiles/abb_egm_rws_managers.dir/src/rws_manager.cpp.o[0m
+[ 57%] [32mBuilding CXX object CMakeFiles/abb_egm_rws_managers.dir/src/system_data_parser.cpp.o[0m
+[ 71%] [32mBuilding CXX object CMakeFiles/abb_egm_rws_managers.dir/src/utilities.cpp.o[0m
+[ 85%] [32mBuilding CXX object CMakeFiles/abb_egm_rws_managers.dir/robot_controller_description.pb.cc.o[0m
+[01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_egm_rws_managers/src/egm_manager.cpp:[m[K In constructor '[01m[Kabb::robot::EGMManager::Channel::[01;32m[KChannel[m[K(const abb::robot::EGMManager::ChannelConfiguration&, boost::asio::io_service&, boost::shared_ptr<boost::condition_variable>)[m[K':
+[01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_egm_rws_managers/src/egm_manager.cpp:98:51:[m[K [01;35m[Kwarning: [m[K'[01m[Kthis[m[K' pointer is null [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wnonnull-Wnonnull]8;;[m[K]
+   98 |   if(!p_interface_ && ![01;35m[Kp_interface_->isInitialized()[m[K)
+      |                        [01;35m[K~~~~~~~~~~~~~~~~~~~~~~~~~~~^~[m[K
+In file included from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_controller_interface.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_egm_rws_managers/include/abb_egm_rws_managers/egm_manager.h:43[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_egm_rws_managers/src/egm_manager.cpp:40[m[K:
+[01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_base_interface.h:82:8:[m[K [01;36m[Knote: [m[Kin a call to non-static member function '[01m[Kbool abb::egm::EGMBaseInterface::[01;32m[KisInitialized[m[K()[m[K'
+   82 |   bool [01;36m[KisInitialized[m[K();
+      |        [01;36m[K^~~~~~~~~~~~~[m[K
+[100%] [32m[1mLinking CXX shared library libabb_egm_rws_managers.so[0m
+[100%] Built target abb_egm_rws_managers

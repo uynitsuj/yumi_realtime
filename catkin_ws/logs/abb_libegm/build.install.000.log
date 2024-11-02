@@ -1,0 +1,26 @@
+[100%] Built target abb_libegm
+[36mInstall the project...[0m
+-- Install configuration: ""
+-- Up-to-date: /home/xi/yumi_ros_noetic/catkin_ws/devel/include
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_logger.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_interpolator.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_base_interface.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_trajectory_interface.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_controller_interface.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_common.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_udp_server.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_common_auxiliary.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm.proto
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_wrapper.proto
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_wrapper_trajectory.proto
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm.pb.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_wrapper.pb.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_wrapper_trajectory.pb.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/abb_libegm_export.h
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_libegm.so
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_libegm/abb_libegmConfig.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_libegm/abb_libegmConfigVersion.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_libegm/package.xml
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_libegm/abb_libegmTargets.cmake
+-- Installing: /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_libegm/abb_libegmTargets-noconfig.cmake

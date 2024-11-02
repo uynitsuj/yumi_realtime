@@ -1,0 +1,7 @@
+In file included from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind/detail/requires_cxx11.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind/bind.hpp:24[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:29[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_libegm/src/egm_udp_server.cpp:37[m[K:
+[01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:36:1:[m[K [01;36m[Knote: [m[K'[01m[K#pragma message: The practice of declaring the Bind placeholders (_1, _2, ...) in the global namespace is deprecated. Please use <boost/bind/bind.hpp> + using namespace boost::placeholders, or define BOOST_BIND_GLOBAL_PLACEHOLDERS to retain the current behavior.[m[K'
+   36 | [01;36m[KBOOST_PRAGMA_MESSAGE[m[K(
+      | [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K

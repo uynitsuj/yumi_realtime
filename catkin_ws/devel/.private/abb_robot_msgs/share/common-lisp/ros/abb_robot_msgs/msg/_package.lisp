@@ -1,0 +1,15 @@
+(cl:defpackage abb_robot_msgs-msg
+  (:use )
+  (:export
+   "<MECHANICALUNITSTATE>"
+   "MECHANICALUNITSTATE"
+   "<RAPIDSYMBOLPATH>"
+   "RAPIDSYMBOLPATH"
+   "<RAPIDTASKSTATE>"
+   "RAPIDTASKSTATE"
+   "<SERVICERESPONSES>"
+   "SERVICERESPONSES"
+   "<SYSTEMSTATE>"
+   "SYSTEMSTATE"
+  ))
+

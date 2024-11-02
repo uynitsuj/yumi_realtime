@@ -1,0 +1,1 @@
+/home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_rapid_sm_addin_msgs/lib/pkgconfig/abb_rapid_sm_addin_msgs.pc

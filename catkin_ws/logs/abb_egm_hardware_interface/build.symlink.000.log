@@ -1,0 +1,7 @@
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_hardware_interface/cmake/abb_egm_hardware_interfaceConfig-version.cmake
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/share/abb_egm_hardware_interface/cmake/abb_egm_hardware_interfaceConfig.cmake
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_hardware_interface_controller_stopper.so
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_hardware_interface_hardware_interface.so
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/pkgconfig/abb_egm_hardware_interface.pc
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/abb_egm_hardware_interface/egm_hardware_interface
+Symlinking /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/abb_egm_hardware_interface/egm_controller_stopper

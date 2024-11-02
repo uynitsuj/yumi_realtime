@@ -1,0 +1,69 @@
+[ 16%] [32mBuilding CXX object CMakeFiles/abb_rws_service_provider.dir/src/rws_service_provider.cpp.o[0m
+[ 33%] [32mBuilding CXX object CMakeFiles/abb_rws_service_provider.dir/src/rws_service_provider_core_srvs.cpp.o[0m
+[ 50%] [32mBuilding CXX object CMakeFiles/abb_rws_service_provider.dir/src/rws_service_provider_sm_srvs.cpp.o[0m
+In file included from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/smart_ptr/detail/requires_cxx11.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/smart_ptr/shared_array.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/shared_array.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/ros/serialized_message.h:33[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/ros/serialization.h:36[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_robot_msgs/include/abb_robot_msgs/ServiceResponses.h:14[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/src/rws_service_provider_core_srvs.cpp:39[m[K:
+[01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:36:1:[m[K [01;36m[Knote: [m[K'[01m[K#pragma message: The practice of declaring the Bind placeholders (_1, _2, ...) in the global namespace is deprecated. Please use <boost/bind/bind.hpp> + using namespace boost::placeholders, or define BOOST_BIND_GLOBAL_PLACEHOLDERS to retain the current behavior.[m[K'
+   36 | [01;36m[KBOOST_PRAGMA_MESSAGE[m[K(
+      | [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+In file included from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/requires_cxx11.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/config.hpp:11[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/error_category.hpp:13[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/error_code.hpp:14[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/errc.hpp:14[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/system_error.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/exceptions.hpp:22[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/pthread/thread_data.hpp:10[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/thread_only.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/thread.hpp:12[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread.hpp:13[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_base_interface.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_controller_interface.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/data_containers.h:44[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/utilities.h:46[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_robot_cpp_utilities/include/abb_robot_cpp_utilities/mapping.h:42[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/src/rws_service_provider_sm_srvs.cpp:39[m[K:
+[01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:36:1:[m[K [01;36m[Knote: [m[K'[01m[K#pragma message: The practice of declaring the Bind placeholders (_1, _2, ...) in the global namespace is deprecated. Please use <boost/bind/bind.hpp> + using namespace boost::placeholders, or define BOOST_BIND_GLOBAL_PLACEHOLDERS to retain the current behavior.[m[K'
+   36 | [01;36m[KBOOST_PRAGMA_MESSAGE[m[K(
+      | [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+In file included from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/requires_cxx11.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/config.hpp:11[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/error_category.hpp:13[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/detail/error_code.hpp:14[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/errc.hpp:14[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/system/system_error.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/exceptions.hpp:22[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/pthread/thread_data.hpp:10[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/thread_only.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread/thread.hpp:12[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/thread.hpp:13[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_base_interface.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_libegm/egm_controller_interface.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/data_containers.h:44[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/utilities.h:46[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/devel/include/abb_egm_rws_managers/rws_manager.h:45[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_robot_cpp_utilities/include/abb_robot_cpp_utilities/initialization.h:40[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/src/rws_service_provider.cpp:39[m[K:
+[01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:36:1:[m[K [01;36m[Knote: [m[K'[01m[K#pragma message: The practice of declaring the Bind placeholders (_1, _2, ...) in the global namespace is deprecated. Please use <boost/bind/bind.hpp> + using namespace boost::placeholders, or define BOOST_BIND_GLOBAL_PLACEHOLDERS to retain the current behavior.[m[K'
+   36 | [01;36m[KBOOST_PRAGMA_MESSAGE[m[K(
+      | [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+[ 66%] [32m[1mLinking CXX shared library /home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_rws_service_provider/lib/libabb_rws_service_provider.so[0m
+[ 66%] Built target abb_rws_service_provider
+[ 83%] [32mBuilding CXX object CMakeFiles/abb_rws_service_provider_exe.dir/src/main.cpp.o[0m
+In file included from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/smart_ptr/detail/requires_cxx11.hpp:9[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/smart_ptr/shared_ptr.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/shared_ptr.hpp:17[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/ros/forwards.h:37[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/ros/common.h:37[m[K,
+                 from [01m[K/home/xi/miniforge3/envs/yumiegmros/include/ros/ros.h:43[m[K,
+                 from [01m[K/home/xi/yumi_ros_noetic/catkin_ws/src/abb_robot_driver/abb_rws_service_provider/src/main.cpp:40[m[K:
+[01m[K/home/xi/miniforge3/envs/yumiegmros/include/boost/bind.hpp:36:1:[m[K [01;36m[Knote: [m[K'[01m[K#pragma message: The practice of declaring the Bind placeholders (_1, _2, ...) in the global namespace is deprecated. Please use <boost/bind/bind.hpp> + using namespace boost::placeholders, or define BOOST_BIND_GLOBAL_PLACEHOLDERS to retain the current behavior.[m[K'
+   36 | [01;36m[KBOOST_PRAGMA_MESSAGE[m[K(
+      | [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+[100%] [32m[1mLinking CXX executable /home/xi/yumi_ros_noetic/catkin_ws/devel/.private/abb_rws_service_provider/lib/abb_rws_service_provider/rws_service_provider[0m
+[100%] Built target abb_rws_service_provider_exe

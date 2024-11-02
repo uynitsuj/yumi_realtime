@@ -60,17 +60,17 @@ cd ~/yumi_ros_noetic/catkin_ws/src
 
 git clone https://github.com/ros-industrial/abb_robot_driver_interfaces.git
 
-mamba install protobuf ros-noetic-controller-manager ros-noetic-joint-state-controller ros-noetic-velocity-controllers ros-noetic-controller-manager-msgs ros-noetic-hardware-interface ros-noetic-joint-limits-interface ros-noetic-controller-interface ros-noetic-realtime-tools
+mamba install protobuf ros-noetic-controller-manager ros-noetic-joint-state-controller ros-noetic-velocity-controllers ros-noetic-position-controllers ros-noetic-controller-manager-msgs ros-noetic-hardware-interface ros-noetic-joint-limits-interface ros-noetic-controller-interface ros-noetic-realtime-tools
 
 # Finally build the workspace (may take a minute)
 cd ~/yumi_ros_noetic/catkin_ws
-catkin_make_isolated
+catkin build
 ```
 Clean install should result in no error messages
 
 Finally, activate the workspace to get access to the packages just built:
 ```bash
-source ~/yumi_ros_noetic/catkin_ws/devel_isolated/setup.bash
+source ~/yumi_ros_noetic/catkin_ws/devel/setup.bash
 ```
 
 ## Test YuMi launch
