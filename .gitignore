@@ -9,5 +9,4 @@
 *.catkin_tools
 /dependencies/*
 
-/dependencies/oculus_reader/*
 /dependencies/oculus_reader/oculus_reader/APK/teleop-debug.apk
