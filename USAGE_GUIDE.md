@@ -8,6 +8,7 @@ If the below guide does not work, go through the following checks:
 
 ## Step 1: Source ROS workspace and launch the YuMi bringup script
 ```bash
+conda activate yumiegmros
 cd ~/yumi_ros_noetic/
 . catkin_ws/devel/setup.bash
 
@@ -25,13 +26,17 @@ The following real-time control interfaces are currently supported by this repos
 - Viser Control
 
 A web visual interface with Inverse Kinematics via [jaxmp](https://github.com/chungmin99/jaxmp) and interactive transform handles (similar to moveit's interface but this can be visualized over remote SSH with Viser)
+
+If you simply wish to view a real-time visualization of the current robot joint angle readings on a YuMi urdf, run this [script](control_interfaces/viser_control/viz_joint_angles.py)
+
 - Oculus VR Controller Tele-Operation Control
 
 (Work In Progress)
 
 
-Activate a new terminal and source the ROS workspace again
+Activate a new terminal and activate the `yumiegmros` env and source the ROS workspace again
 ```bash
+conda activate yumiegmros
 cd ~/yumi_ros_noetic/
 . catkin_ws/devel/setup.bash
 ```
