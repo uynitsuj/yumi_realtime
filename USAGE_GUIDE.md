@@ -23,9 +23,11 @@ rostopic echo /yumi/rws/joint_states
 ## Step 2: Choose your desired control interface and run script
 The following real-time control interfaces are currently supported by this repository:
 - Viser Control
+
 &nbsp;A web visual interface with Inverse Kinematics via [jaxmp](https://github.com/chungmin99/jaxmp) and interactive transform handles (similar to moveit's interface but this can be visualized over remote SSH with Viser)
 - Oculus VR Controller Tele-Operation Control
-&nbsp;(Work In Progress)
+
+nbsp;(Work In Progress)
 
 
 Activate a new terminal and source the ROS workspace again
