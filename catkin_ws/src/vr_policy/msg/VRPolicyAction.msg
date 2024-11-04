@@ -1,0 +1,5 @@
+string header
+geometry_msgs/TransformStamped target_cartesian_pos
+float64 target_gripper_pos
+geometry_msgs/TransformStamped target_cartesian_vel
+float64 target_gripper_vel

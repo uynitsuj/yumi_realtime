@@ -32,6 +32,8 @@ from abb_egm_msgs.msg import EGMState
 from std_msgs.msg import Float64, Float64MultiArray
 from controller_manager_msgs.srv import SwitchController
 
+from multiprocessing import shared_memory
+
 YUMI_REST_POSE = {
     "yumi_joint_1_r": 1.21442839,
     "yumi_joint_2_r": -1.03205606,
@@ -160,11 +162,11 @@ def main(
         manipulability_cost_handler = server.gui.add_number(
             "Yoshikawa index", 0.001, disabled=True
         )
-
+        
     set_frames_to_current_pose = server.gui.add_button("Set frames to current pose")
     add_joint_button = server.gui.add_button("Add joint!")
     start_egm_button = server.gui.add_button("Start EGM Control!")
-
+    
     target_name_handles: list[viser.GuiDropdownHandle] = []
     target_tf_handles: list[viser.TransformControlsHandle] = []
     target_frame_handles: list[viser.FrameHandle] = []
@@ -201,6 +203,23 @@ def main(
     add_joint_button.on_click(lambda _: add_joint())
     add_joint()
     
+    frame_handle_left_real = server.scene.add_frame(
+        f"tf_left_real",
+        axes_length=0.5 * tf_size_handle.value,
+        axes_radius=0.01 * tf_size_handle.value,
+        origin_radius=0.1 * tf_size_handle.value,
+    )
+    frame_handle_right_real = server.scene.add_frame(
+        f"tf_right_real",
+        axes_length=0.5 * tf_size_handle.value,
+        axes_radius=0.01 * tf_size_handle.value,
+        origin_radius=0.1 * tf_size_handle.value,
+    )
+    
+    # target_frame_handles.append(frame_handle_left_real)
+    # target_frame_handles.append(frame_handle_right_real)
+    
+    
     rospy.init_node('yumi_controller', anonymous=True)
 
     start_egm = rospy.ServiceProxy('/yumi/rws/sm_addin/start_egm_joint', TriggerWithResultCode)
@@ -224,24 +243,26 @@ def main(
     def start_egm_control():
         rospy.wait_for_service('/yumi/rws/sm_addin/start_egm_joint')
         se_result = start_egm()
+
         time.sleep(0.1)
         sc_result = switch_controller(['joint_group_position_controller'],[''],3,True,0.0)
         
-    start_egm_button.on_click(lambda _: start_egm_control())
+    
+    # start_egm_button.on_click(lambda _: start_egm_control())
     
     # Let the user change the size of the transformcontrol gizmo.
-    @tf_size_handle.on_update
-    def _(_):
-        for target_tf_handle in target_tf_handles:
-            target_tf_handle.scale = tf_size_handle.value
-        for target_frame_handle in target_frame_handles:
-            target_frame_handle.axes_length = 0.5 * tf_size_handle.value
-            target_frame_handle.axes_radius = 0.05 * tf_size_handle.value
-            target_frame_handle.origin_radius = 0.1 * tf_size_handle.value
+    # @tf_size_handle.on_update
+    # def _(_):
+    #     for target_tf_handle in target_tf_handles:
+    #         target_tf_handle.scale = tf_size_handle.value
+    #     for target_frame_handle in target_frame_handles:
+    #         target_frame_handle.axes_length = 0.5 * tf_size_handle.value
+    #         target_frame_handle.axes_radius = 0.05 * tf_size_handle.value
+    #         target_frame_handle.origin_radius = 0.1 * tf_size_handle.value
 
     # Set target frames to where it is on the currently displayed robot.
     # We need to put them in world frame (since our goal is to match joint-to-world).
-    @set_frames_to_current_pose.on_click
+    # @set_frames_to_current_pose.on_click
     def _(_):
         nonlocal joints
         base_pose = jnp.array(
@@ -261,7 +282,6 @@ def main(
             target_tf_handle.position = onp.array(T_target_world.translation())
             target_tf_handle.wxyz = onp.array(T_target_world.rotation().wxyz)
 
-    YUMI_CURR_POSE = {}
     def rws_ja_callback(data):
         get_io_signal = rospy.ServiceProxy('yumi/rws/get_io_signal', GetIOSignal)
         
@@ -287,9 +307,26 @@ def main(
             "gripper_l_joint": int(gripper_L.value)/10000,
         }
         
+        joints_real = jnp.array(list(YUMI_CURR_POSE.values()), dtype=jnp.float32)
+        
+        # ja_array[:14] = list(YUMI_CURR_POSE.values())[0:14]
         urdf_vis_real.update_cfg(YUMI_CURR_POSE)
+        # import pdb; pdb.set_trace()
+        base_pose = jnp.array(urdf_base_frame.wxyz.tolist() + urdf_base_frame.position.tolist())        
+        tf_left_real = jaxlie.SE3(base_pose) @ jaxlie.SE3(
+            kin.forward_kinematics(joints_real)[kin.joint_names.index('gripper_l_joint')]
+        )
+        tf_right_real = jaxlie.SE3(base_pose) @ jaxlie.SE3(
+            kin.forward_kinematics(joints_real)[kin.joint_names.index('gripper_r_joint')]
+        )
+        frame_handle_left_real.position = onp.array(tf_left_real.translation())
+        frame_handle_left_real.wxyz = onp.array(tf_left_real.rotation().wxyz)
+        
+        frame_handle_right_real.position = onp.array(tf_right_real.translation())
+        frame_handle_right_real.wxyz = onp.array(tf_right_real.rotation().wxyz)
+        
+        # import pdb; pdb.set_trace()
     
-
     has_jitted = False
     while True:
         # Don't do anything if there are no target joints...
@@ -349,9 +386,7 @@ def main(
             has_jitted = True
             rospy.Subscriber("yumi/rws/joint_states", JointState, rws_ja_callback)
             joint_vel_pub = rospy.Publisher("yumi/egm/joint_group_position_controller/command", Float64MultiArray, queue_size=10)
-            r = rospy.Rate(100) # 250hz
-
-
+            r = rospy.Rate(100) # 100Hz
 
         # Update visualizations.
         urdf_base_frame.position = onp.array(base_pose.translation())
@@ -372,7 +407,11 @@ def main(
             manip_cost += RobotFactors.manip_yoshikawa(kin, joints, target_joint_idx)
         manip_cost /= len(target_joint_indices)
         manipulability_cost_handler.value = onp.array(manip_cost).item()
-
+        
+        # if not EGMActive and :
+            # start_egm_control()
+            
+        # Need to flip arm order
         joint_desired = onp.array([
             joints[7], joints[8], joints[9], joints[10], joints[11], joints[12], joints[13],
             joints[0], joints[1], joints[2], joints[3], joints[4], joints[5], joints[6]
@@ -381,7 +420,6 @@ def main(
         ja_msg = Float64MultiArray()
         ja_msg.data = joint_desired[0:14]
         joint_vel_pub.publish(ja_msg)
-        # print(ja_msg.data)
         r.sleep()
 
 if __name__ == "__main__":

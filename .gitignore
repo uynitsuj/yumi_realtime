@@ -1,7 +1,13 @@
 /catkin_ws/build_isolated
 /catkin_ws/devel_isolated
 /catkin_ws/build
+/catkin_ws/prev_build
+/catkin_ws/prev_devel
 /catkin_ws/logs
 /catkin_ws/devel
 *.catkin_workspace
 *.catkin_tools
+/dependencies/*
+
+/dependencies/oculus_reader/*
+/dependencies/oculus_reader/oculus_reader/APK/teleop-debug.apk

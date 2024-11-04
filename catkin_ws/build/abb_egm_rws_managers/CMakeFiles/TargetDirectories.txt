@@ -1,7 +1,0 @@
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/abb_egm_rws_managers.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/edit_cache.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/rebuild_cache.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/list_install_components.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/install.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/install/local.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_egm_rws_managers/CMakeFiles/install/strip.dir

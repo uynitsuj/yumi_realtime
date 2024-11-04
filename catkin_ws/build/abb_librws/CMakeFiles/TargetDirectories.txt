@@ -1,7 +1,0 @@
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/abb_librws.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/edit_cache.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/rebuild_cache.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/list_install_components.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/install.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/install/local.dir
-/home/xi/yumi_ros_noetic/catkin_ws/build/abb_librws/CMakeFiles/install/strip.dir

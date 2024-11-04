@@ -1,8 +1,0 @@
-prefix=/home/xi/yumi_ros_noetic/catkin_ws/install
-
-Name: abb_rws_state_publisher
-Description: Description of abb_rws_state_publisher
-Version: 0.5.0
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -labb_rws_state_publisher /home/xi/yumi_ros_noetic/catkin_ws/devel/lib/libabb_egm_rws_managers.so
-Requires: abb_rapid_sm_addin_msgs abb_robot_cpp_utilities abb_robot_msgs roscpp sensor_msgs

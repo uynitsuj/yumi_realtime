@@ -1,6 +1,0 @@
-devel_space: /home/xi/yumi_ros_noetic/catkin_ws/devel
-install: false
-install_space: /home/xi/yumi_ros_noetic/catkin_ws/install
-profile: default
-source_space: /home/xi/yumi_ros_noetic/catkin_ws/src
-workspace: /home/xi/yumi_ros_noetic/catkin_ws
