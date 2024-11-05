@@ -34,9 +34,11 @@ def main():
 
     # Publisher for OculusData message
     oculus_publisher = rospy.Publisher('/oculus_reader/data', OculusData, queue_size=10)
-
+    
+    import time
+    start = time.time()
     while not rospy.is_shutdown():
-        rospy.sleep(1)
+        rospy.sleep(1/120)
         transformations, buttons = oculus_reader.get_transformations_and_buttons()
 
         # Create an OculusData message
@@ -100,15 +102,17 @@ def main():
         oculus_data_msg.left_joystick_x = left_joystick[0]
         oculus_data_msg.left_joystick_y = left_joystick[1]
 
-        oculus_data_msg.right_grip = buttons.get('rightGrip', 0.0)
-        oculus_data_msg.left_grip = buttons.get('leftGrip', 0.0)
-        oculus_data_msg.right_trigger = buttons.get('rightTrig', 0.0)
-        oculus_data_msg.left_trigger = buttons.get('leftTrig', 0.0)
+        oculus_data_msg.right_grip = buttons.get('rightGrip', (0.0,))[0]
+        oculus_data_msg.left_grip = buttons.get('leftGrip', (0.0,))[0]
+        oculus_data_msg.right_trigger = buttons.get('rightTrig', (0.0,))[0]
+        oculus_data_msg.left_trigger = buttons.get('leftTrig', (0.0,))[0]
 
         # Publish the OculusData message
         oculus_publisher.publish(oculus_data_msg)
 
         # Print transformations and buttons for debugging
+        print("freq: ", 1/(time.time() - start))
+        start = time.time()
         print('transformations', transformations)
         print('buttons', buttons)
 

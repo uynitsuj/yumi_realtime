@@ -7,14 +7,57 @@ https://github.com/rail-berkeley/oculus_reader/blob/de73f3d259b3c41c4564f70a6468
 import time
 import numpy as np
 from oculus_reader.reader import OculusReader
-from tf.transformations import quaternion_from_matrix
+from tf.transformations import quaternion_from_matrix, quaternion_matrix
 import rospy
 import tf2_ros
 import geometry_msgs.msg
-from vr_control.msg import VRPolicyAction
-import threading
+from vr_policy.msg import VRPolicyAction, OculusData
 from scipy.spatial.transform import Rotation as R
-from transformations import quat_to_euler, euler_to_quat, rmat_to_quat, quat_diff, add_angles, vec_to_reorder_mat
+from transformations import quat_to_euler, euler_to_quat, rmat_to_quat, quat_diff, add_angles, vec_to_reorder_mat, add_quats
+
+def parse_data(data : OculusData):
+    """
+    Parse the button data from the Oculus reader node.
+    """
+    left_pose = quaternion_matrix([data.left_controller_transform.transform.rotation.x,
+                                    data.right_controller_transform.transform.rotation.y,
+                                    data.right_controller_transform.transform.rotation.z,
+                                    data.right_controller_transform.transform.rotation.w])
+    left_pose[:3, 3] = np.array([data.right_controller_transform.transform.translation.x,
+                        data.right_controller_transform.transform.translation.y,
+                        data.right_controller_transform.transform.translation.z])
+    right_pose = quaternion_matrix([data.left_controller_transform.transform.rotation.x,
+                                        data.left_controller_transform.transform.rotation.y,
+                                        data.left_controller_transform.transform.rotation.z,
+                                        data.left_controller_transform.transform.rotation.w])
+    right_pose[:3, 3] = np.array([data.left_controller_transform.transform.translation.x,
+                    data.left_controller_transform.transform.translation.y,
+                    data.left_controller_transform.transform.translation.z])
+    pose = {
+        "r" : right_pose,
+        "l" : left_pose
+    }
+    button = {
+        "A" : data.A, 
+        "B" : data.B,
+        "X" : data.X,
+        "Y" : data.Y,
+        "RThU" : data.RThU,
+        "LThU" : data.LThU,
+        "RJ" : data.RJ,
+        "LJ" : data.LJ,
+        "RG" : data.RG,
+        "LG" : data.LG,
+        "RTr" : data.RTr,
+        "LTr" : data.LTr,
+        "rightJS" : (data.right_joystick_x, data.right_joystick_y),
+        "leftJS" : (data.left_joystick_x, data.left_joystick_y),
+        "rightGrip" : (data.right_grip,),
+        "leftGrip" : (data.left_grip,),
+        "rightTrig" : (data.right_trigger,),
+        "leftTrig" : (data.left_trigger,),
+    }
+    return pose, button
 
 class VRPolicy:
     def __init__(
@@ -33,16 +76,17 @@ class VRPolicy:
         rospy.init_node('vr_policy_node', anonymous=True)
         
         # Subscribe to the Oculus reader node for both controllers
-        rospy.Subscriber('/oculus_reader/oculus_r', geometry_msgs.msg.TransformStamped, self._oculus_data_callback_r)
-        rospy.Subscriber('/oculus_reader/oculus_l', geometry_msgs.msg.TransformStamped, self._oculus_data_callback_l)
+        rospy.Subscriber('/oculus_reader/data', OculusData, self._oculus_data_callback)
         
-        # Publisher for actions
-        self.action_publisher = rospy.Publisher('/vr_policy/control_l', VRPolicyAction, queue_size=10)
-        self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
+        # Subscribe to the current robot pose
+        rospy.Subscriber('/robotpose', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
 
-        # subscribe to joint position and velocity
-        # import fk and ik functions
-
+        # publisher for actions
+        if right_controller:
+            self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
+        else:
+            self.action_publisher = rospy.Publisher('/vr_policy/control_l', VRPolicyAction, queue_size=10)
+        
         self.oculus_reader = OculusReader()
         self.vr_to_global_mat = np.eye(4)
         self.max_lin_vel = max_lin_vel
@@ -65,26 +109,24 @@ class VRPolicy:
         self._update_internal_state(data)
         
         # Generate an action based on the internal state
-        action = self._generate_action()
+        action = self._calculate_action())
         
         # Publish the action
         self._publish_action(action)
 
-    def _update_internal_state(self, data):
+    def _robot_data_callback(self, data):
         """
-        Update the internal state based on Oculus data.
+        Callback function to handle incoming data from the robot pose subscriber.
         """
-        # Update internal state using the data
-        self.internal_state = data
-        # Add any other processing logic needed to handle data
-
-    def _generate_action(self):
-        """
-        Generate an action based on the internal state.
-        """
-        # Placeholder for action generation logic
-        # This should be replaced with the actual logic to determine the action
-        return "example_action"
+        # Update the internal state with the received data
+        # TODO this needs a lock! 
+        self._state["robot_pose"] = quaternion_matrix([data.transform.rotation.x,
+                                                     data.transform.rotation.y,
+                                                     data.transform.rotation.z,
+                                                     data.transform.rotation.w])
+        self._state["robot_pose"] = [data.transform.translation.x,
+                                          data.transform.translation.y,
+                                          data.transform.translation.z]
 
     def _publish_action(self, action):
         """
@@ -100,6 +142,7 @@ class VRPolicy:
 
     def reset_state(self):
         self._state = {
+            "robot_pose" : None, 
             "poses": {},
             "buttons": {"A": False, "B": False, "X": False, "Y": False},
             "movement_enabled": False,
@@ -111,46 +154,35 @@ class VRPolicy:
         self.vr_origin = None
         self.vr_state = None
 
-    def _update_internal_state(self, num_wait_sec=5, hz=50):
-        last_read_time = time.time()
-        while True:
-            # Regulate Read Frequency #
-            time.sleep(1 / hz)
+    def _update_internal_state(self, data):
+        # Read Controller
+        poses, buttons = parse_data(data)
+        # Determine Control Pipeline #
+        toggled = self._state["movement_enabled"] != buttons[self.controller_id.upper() + "G"]
+        self.update_sensor = self.update_sensor or buttons[self.controller_id.upper() + "G"]
+        self.reset_orientation = self.reset_orientation or buttons[self.controller_id.upper() + "J"]
+        self.reset_origin = self.reset_origin or toggled
 
-            # Read Controller
-            time_since_read = time.time() - last_read_time
-            poses, buttons = self.oculus_reader.get_transformations_and_buttons()
-            self._state["controller_on"] = time_since_read < num_wait_sec
-            if poses == {}:
-                continue
+        # Save Info #
+        self._state["poses"] = poses
+        self._state["buttons"] = buttons
+        self._state["movement_enabled"] = buttons[self.controller_id.upper() + "G"]
+        self._state["controller_on"] = True
 
-            # Determine Control Pipeline #
-            toggled = self._state["movement_enabled"] != buttons[self.controller_id.upper() + "G"]
-            self.update_sensor = self.update_sensor or buttons[self.controller_id.upper() + "G"]
-            self.reset_orientation = self.reset_orientation or buttons[self.controller_id.upper() + "J"]
-            self.reset_origin = self.reset_origin or toggled
-
-            # Save Info #
-            self._state["poses"] = poses
-            self._state["buttons"] = buttons
-            self._state["movement_enabled"] = buttons[self.controller_id.upper() + "G"]
-            self._state["controller_on"] = True
-            last_read_time = time.time()
-
-            # Update Definition Of "Forward" #
-            stop_updating = self._state["buttons"][self.controller_id.upper() + "J"] or self._state["movement_enabled"]
-            if self.reset_orientation:
-                rot_mat = np.asarray(self._state["poses"][self.controller_id])
-                if stop_updating:
-                    self.reset_orientation = False
-                # try to invert the rotation matrix, if not possible, then just use the identity matrix
-                try:
-                    rot_mat = np.linalg.inv(rot_mat)
-                except:
-                    print(f"exception for rot mat: {rot_mat}")
-                    rot_mat = np.eye(4)
-                    self.reset_orientation = True
-                self.vr_to_global_mat = rot_mat
+        # Update Definition Of "Forward" #
+        stop_updating = self._state["buttons"][self.controller_id.upper() + "J"] or self._state["movement_enabled"]
+        if self.reset_orientation:
+            rot_mat = np.asarray(self._state["poses"][self.controller_id])
+            if stop_updating:
+                self.reset_orientation = False
+            # try to invert the rotation matrix, if not possible, then just use the identity matrix
+            try:
+                rot_mat = np.linalg.inv(rot_mat)
+            except:
+                print(f"exception for rot mat: {rot_mat}")
+                rot_mat = np.eye(4)
+                self.reset_orientation = True
+            self.vr_to_global_mat = rot_mat
 
     def _process_reading(self):
         rot_mat = np.asarray(self._state["poses"][self.controller_id])
@@ -174,17 +206,16 @@ class VRPolicy:
             gripper_vel = gripper_vel * self.max_gripper_vel / gripper_vel_norm
         return lin_vel, rot_vel, gripper_vel
 
-    def _calculate_action(self, state_dict, include_info=False):
+    def _calculate_action(self, include_info=False):
         # Read Sensor #
         if self.update_sensor:
             self._process_reading()
             self.update_sensor = False
 
         # Read Observation
-        robot_pos = np.array(state_dict["cartesian_position"][:3])
-        robot_euler = state_dict["cartesian_position"][3:]
-        robot_quat = euler_to_quat(robot_euler)
-        robot_gripper = state_dict["gripper_position"]
+        robot_pos = self._state["robot_pose"][:3, 3]
+        robot_quat = rmat_to_quat(self._state["robot_pose"][:3, :3])
+        # robot_gripper = state_dict["gripper_position"]
 
         # Reset Origin On Release #
         if self.reset_origin:
@@ -204,18 +235,20 @@ class VRPolicy:
         euler_action = quat_to_euler(quat_action)
 
         # Calculate Gripper Action #
-        gripper_action = (self.vr_state["gripper"] * 1.5) - robot_gripper
+        # gripper_action = (self.vr_state["gripper"] * 1.5) - robot_gripper
 
         # Calculate Desired Pose #
         target_pos = pos_action + robot_pos
-        target_euler = add_angles(euler_action, robot_euler)
-        target_cartesian = np.concatenate([target_pos, target_euler])
+        target_quat = add_quats(robot_quat, quat_action)
+        # target_euler = add_angles(euler_action, robot_euler)
+        target_cartesian = np.concatenate([target_pos, target_quat])
         target_gripper = self.vr_state["gripper"]
 
         # Scale Appropriately #
         pos_action *= self.pos_action_gain
         euler_action *= self.rot_action_gain
-        gripper_action *= self.gripper_action_gain
+        # gripper_action *= self.gripper_action_gain
+        gripper_action = 0 # TODO fix this! 
         lin_vel, rot_vel, gripper_vel = self._limit_velocity(pos_action, euler_action, gripper_action)
 
         # Prepare Return Values #
