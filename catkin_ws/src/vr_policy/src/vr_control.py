@@ -10,29 +10,86 @@ from oculus_reader.reader import OculusReader
 from tf.transformations import quaternion_from_matrix, quaternion_matrix
 import rospy
 import tf2_ros
+import threading
 import geometry_msgs.msg
+import std_msgs.msg
 from vr_policy.msg import VRPolicyAction, OculusData
 from scipy.spatial.transform import Rotation as R
 from transformations import quat_to_euler, euler_to_quat, rmat_to_quat, quat_diff, add_angles, vec_to_reorder_mat, add_quats
+import tyro
+from typing import Literal
+from scipy.spatial.transform import Rotation as R
+
+def flip_xy(data: np.ndarray):
+    # Extract translation and quaternion
+    x, y, z, qx, qy, qz, qw = data
+    
+    # Flip the translation in the XY direction
+    flipped_translation = np.array([-x, -y, z])  # Flip x and y, leave z unchanged
+    
+    # Create the rotation from the quaternion
+    rotation = R.from_quat([qx, qy, qz, qw])
+    
+    # Create a rotation that flips the XY axis (180 degree rotation around Z)
+    flip_rotation = R.from_euler('z', 180, degrees=True)
+    
+    # Apply the flip rotation to the original rotation
+    flipped_rotation = flip_rotation * rotation
+    
+    # Get the new quaternion after applying the flip
+    flipped_quat = flipped_rotation.as_quat()
+    
+    # Return the new data with flipped XY translation and rotation
+    return np.array([flipped_translation[0], flipped_translation[1], flipped_translation[2], 
+                     flipped_quat[0], flipped_quat[1], flipped_quat[2], flipped_quat[3]])
+
+def flip_xy_quat(quat : np.ndarray):
+    # Create the rotation from the quaternion
+    rotation = R.from_quat(quat)
+    
+    # Create a rotation that flips the XY axis (180 degree rotation around Z)
+    flip_rotation = R.from_euler('z', 180, degrees=True)
+    
+    # Apply the flip rotation to the original rotation
+    flipped_rotation = flip_rotation * rotation
+    
+    # Get the new quaternion after applying the flip
+    flipped_quat = flipped_rotation.as_quat()
+    
+    return flipped_quat
+
+def flip_xy_trans(xyz : np.ndarray):
+    return np.array([-xyz[0], -xyz[1], xyz[2]])
+
+def flip_xz_rot(quat : np.ndarray):
+    rotation = R.from_quat(quat)
+    rot_xz = np.array([
+        [-1, 0, 0], 
+        [0, 1, 0], 
+        [0, 0, -1]
+    ])
+    rot_xz = R.from_matrix(rot_xz)
+    flipped_quat = rotation * rot_xz
+    return flipped_quat.as_quat()
 
 def parse_data(data : OculusData):
     """
     Parse the button data from the Oculus reader node.
     """
     left_pose = quaternion_matrix([data.left_controller_transform.transform.rotation.x,
-                                    data.right_controller_transform.transform.rotation.y,
-                                    data.right_controller_transform.transform.rotation.z,
-                                    data.right_controller_transform.transform.rotation.w])
-    left_pose[:3, 3] = np.array([data.right_controller_transform.transform.translation.x,
-                        data.right_controller_transform.transform.translation.y,
-                        data.right_controller_transform.transform.translation.z])
-    right_pose = quaternion_matrix([data.left_controller_transform.transform.rotation.x,
-                                        data.left_controller_transform.transform.rotation.y,
-                                        data.left_controller_transform.transform.rotation.z,
-                                        data.left_controller_transform.transform.rotation.w])
-    right_pose[:3, 3] = np.array([data.left_controller_transform.transform.translation.x,
-                    data.left_controller_transform.transform.translation.y,
-                    data.left_controller_transform.transform.translation.z])
+                                    data.left_controller_transform.transform.rotation.y,
+                                    data.left_controller_transform.transform.rotation.z,
+                                    data.left_controller_transform.transform.rotation.w])
+    left_pose[:3, 3] = np.array([data.left_controller_transform.transform.translation.x,
+                        data.left_controller_transform.transform.translation.y,
+                        data.left_controller_transform.transform.translation.z])
+    right_pose = quaternion_matrix([data.right_controller_transform.transform.rotation.x,
+                                        data.right_controller_transform.transform.rotation.y,
+                                        data.right_controller_transform.transform.rotation.z,
+                                        data.right_controller_transform.transform.rotation.w])
+    right_pose[:3, 3] = np.array([data.right_controller_transform.transform.translation.x,
+                    data.right_controller_transform.transform.translation.y,
+                    data.right_controller_transform.transform.translation.z])
     pose = {
         "r" : right_pose,
         "l" : left_pose
@@ -59,6 +116,20 @@ def parse_data(data : OculusData):
     }
     return pose, button
 
+def action7d2tf(action : np.ndarray):
+    assert action.shape == (7,)
+    action_data = geometry_msgs.msg.TransformStamped()
+    action_data.header = std_msgs.msg.Header()
+    action_data.header.stamp = rospy.Time.now()
+    action_data.transform.translation.x = action[0]
+    action_data.transform.translation.y = action[1]
+    action_data.transform.translation.z = action[2]
+    action_data.transform.rotation.x = action[3]
+    action_data.transform.rotation.y = action[4]
+    action_data.transform.rotation.z = action[5]
+    action_data.transform.rotation.w = action[6]
+    return action_data
+
 class VRPolicy:
     def __init__(
         self,
@@ -75,18 +146,7 @@ class VRPolicy:
         # Initialize the ROS node
         rospy.init_node('vr_policy_node', anonymous=True)
         
-        # Subscribe to the Oculus reader node for both controllers
-        rospy.Subscriber('/oculus_reader/data', OculusData, self._oculus_data_callback)
-        
-        # Subscribe to the current robot pose
-        rospy.Subscriber('/robotpose', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
-
-        # publisher for actions
-        if right_controller:
-            self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
-        else:
-            self.action_publisher = rospy.Publisher('/vr_policy/control_l', VRPolicyAction, queue_size=10)
-        
+        self._state_lock = threading.Lock()
         self.oculus_reader = OculusReader()
         self.vr_to_global_mat = np.eye(4)
         self.max_lin_vel = max_lin_vel
@@ -101,6 +161,21 @@ class VRPolicy:
         self.reset_orientation = True
         self.reset_state()
 
+        # Subscribe to the Oculus reader node for both controllers
+        rospy.Subscriber('/oculus_reader/data', OculusData, self._oculus_data_callback)
+        
+        # Subscribe to the current robot pose
+        if right_controller:
+            rospy.Subscriber('/yumi/tf_right_real', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
+        else: 
+            rospy.Subscriber('/yumi/tf_left_real', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
+
+        # publisher for actions
+        if right_controller:
+            self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
+        else:
+            self.action_publisher = rospy.Publisher('/vr_policy/control_l', VRPolicyAction, queue_size=10)
+
     def _oculus_data_callback(self, data):
         """
         Callback function to handle incoming data from the Oculus reader node.
@@ -109,24 +184,32 @@ class VRPolicy:
         self._update_internal_state(data)
         
         # Generate an action based on the internal state
-        action = self._calculate_action())
+        action = self._calculate_action()
         
-        # Publish the action
-        self._publish_action(action)
+        if action is None: 
+            return
+        # Publish the generated action
+        policy_action = VRPolicyAction()
+        policy_action.target_cartesian_pos = action7d2tf(action["target_pose"])
+        policy_action.target_gripper_pos = action["target_gripper_pos"]
+        policy_action.target_cartesian_vel = action7d2tf(action["target_vel"])
+        policy_action.target_gripper_vel = action["target_gripper_vel"]
+        policy_action.enable = self._state["movement_enabled"]
+        self._publish_action(policy_action)
 
     def _robot_data_callback(self, data):
         """
         Callback function to handle incoming data from the robot pose subscriber.
         """
         # Update the internal state with the received data
-        # TODO this needs a lock! 
-        self._state["robot_pose"] = quaternion_matrix([data.transform.rotation.x,
-                                                     data.transform.rotation.y,
-                                                     data.transform.rotation.z,
-                                                     data.transform.rotation.w])
-        self._state["robot_pose"] = [data.transform.translation.x,
-                                          data.transform.translation.y,
-                                          data.transform.translation.z]
+        with self._state_lock: 
+            self._state["robot_pose"] = quaternion_matrix([data.transform.rotation.x,
+                                                            data.transform.rotation.y,
+                                                            data.transform.rotation.z,
+                                                            data.transform.rotation.w])
+            self._state["robot_pose"][:3, 3] = np.array([data.transform.translation.x,
+                                                data.transform.translation.y,
+                                                data.transform.translation.z])
 
     def _publish_action(self, action):
         """
@@ -206,15 +289,19 @@ class VRPolicy:
             gripper_vel = gripper_vel * self.max_gripper_vel / gripper_vel_norm
         return lin_vel, rot_vel, gripper_vel
 
-    def _calculate_action(self, include_info=False):
+    def _calculate_action(self):
         # Read Sensor #
         if self.update_sensor:
             self._process_reading()
             self.update_sensor = False
 
         # Read Observation
-        robot_pos = self._state["robot_pose"][:3, 3]
-        robot_quat = rmat_to_quat(self._state["robot_pose"][:3, :3])
+        with self._state_lock: 
+            if self._state["robot_pose"] is None:
+                return None
+            robot_pos = self._state["robot_pose"][:3, 3]
+            robot_rmat = self._state["robot_pose"][:3, :3]
+        robot_quat = rmat_to_quat(robot_rmat)
         # robot_gripper = state_dict["gripper_position"]
 
         # Reset Origin On Release #
@@ -226,12 +313,23 @@ class VRPolicy:
         # Calculate Positional Action #
         robot_pos_offset = robot_pos - self.robot_origin["pos"]
         target_pos_offset = self.vr_state["pos"] - self.vr_origin["pos"]
+
+        # flip x y 
+        # target_pos_offset = flip_xy_trans(target_pos_offset)
+
         pos_action = target_pos_offset - robot_pos_offset
 
         # Calculate Euler Action #
         robot_quat_offset = quat_diff(robot_quat, self.robot_origin["quat"])
         target_quat_offset = quat_diff(self.vr_state["quat"], self.vr_origin["quat"])
-        quat_action = quat_diff(target_quat_offset, robot_quat_offset)
+
+        # flip x y 
+        # target_quat_offset = flip_xy_quat(target_quat_offset)
+
+        # flip x z 
+        # target_quat_offset = flip_xz_rot(target_quat_offset)
+
+        quat_action = quat_diff(robot_quat_offset, target_quat_offset)
         euler_action = quat_to_euler(quat_action)
 
         # Calculate Gripper Action #
@@ -240,7 +338,6 @@ class VRPolicy:
         # Calculate Desired Pose #
         target_pos = pos_action + robot_pos
         target_quat = add_quats(robot_quat, quat_action)
-        # target_euler = add_angles(euler_action, robot_euler)
         target_cartesian = np.concatenate([target_pos, target_quat])
         target_gripper = self.vr_state["gripper"]
 
@@ -250,17 +347,15 @@ class VRPolicy:
         # gripper_action *= self.gripper_action_gain
         gripper_action = 0 # TODO fix this! 
         lin_vel, rot_vel, gripper_vel = self._limit_velocity(pos_action, euler_action, gripper_action)
-
-        # Prepare Return Values #
-        info_dict = {"target_cartesian_position": target_cartesian, "target_gripper_position": target_gripper}
-        action = np.concatenate([lin_vel, rot_vel, [gripper_vel]])
-        action = action.clip(-1, 1)
-
-        # Return #
-        if include_info:
-            return action, info_dict
-        else:
-            return action
+        # convert rotation velocity to quaternions 
+        rot_vel = euler_to_quat(rot_vel)
+        action = np.concatenate([np.clip(lin_vel, -1, 1), rot_vel])
+        return {
+            "target_pose" : target_cartesian, 
+            "target_gripper_pos" : target_gripper, 
+            "target_vel" : action, 
+            "target_gripper_vel" : np.clip(gripper_vel, -1, 1)
+        }
 
     def get_info(self):
         return {
@@ -270,11 +365,16 @@ class VRPolicy:
             "controller_on": self._state["controller_on"],
         }
 
-    def forward(self, obs_dict, include_info=False):
-        if self._state["poses"] == {}:
-            action = np.zeros(7)
-            if include_info:
-                return action, {}
-            else:
-                return action
-        return self._calculate_action(obs_dict["robot_state"], include_info=include_info)
+def main(
+    controller : Literal["r", "l", "rl"] = "rl", # left and right controller
+): 
+    if "r" in controller: 
+        print("start right controller")
+        right_policy = VRPolicy(right_controller=True)
+    if "l" in controller:
+        print("start left controller")
+        left_policy = VRPolicy(right_controller=False)
+    rospy.spin()
+
+if __name__ == "__main__":
+    tyro.cli(main)

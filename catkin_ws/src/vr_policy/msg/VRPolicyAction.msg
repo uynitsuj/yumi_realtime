@@ -1,4 +1,5 @@
 string header
+bool enable
 geometry_msgs/TransformStamped target_cartesian_pos
 float64 target_gripper_pos
 geometry_msgs/TransformStamped target_cartesian_vel
