@@ -20,6 +20,28 @@ import tyro
 from typing import Literal
 from scipy.spatial.transform import Rotation as R
 
+def publish_transform(transform, name):
+    translation = transform[:3, 3]
+
+    br = tf2_ros.TransformBroadcaster()
+    t = geometry_msgs.msg.TransformStamped()
+
+    t.header.stamp = rospy.Time.now()
+    t.header.frame_id = 'world'
+    t.child_frame_id = name
+    t.transform.translation.x = translation[0]
+    t.transform.translation.y = translation[1]
+    t.transform.translation.z = translation[2]
+
+    quat = quaternion_from_matrix(transform)
+    t.transform.rotation.x = quat[0]
+    t.transform.rotation.y = quat[1]
+    t.transform.rotation.z = quat[2]
+    t.transform.rotation.w = quat[3]
+
+    br.sendTransform(t)
+
+
 def flip_xy(data: np.ndarray):
     # Extract translation and quaternion
     x, y, z, qx, qy, qz, qw = data
@@ -166,15 +188,15 @@ class VRPolicy:
         
         # Subscribe to the current robot pose
         if right_controller:
-            rospy.Subscriber('/yumi/tf_right_real', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
-        else: 
             rospy.Subscriber('/yumi/tf_left_real', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
+        else: 
+            rospy.Subscriber('/yumi/tf_right_real', geometry_msgs.msg.TransformStamped, self._robot_data_callback)
 
         # publisher for actions
         if right_controller:
-            self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
-        else:
             self.action_publisher = rospy.Publisher('/vr_policy/control_l', VRPolicyAction, queue_size=10)
+        else:
+            self.action_publisher = rospy.Publisher('/vr_policy/control_r', VRPolicyAction, queue_size=10)
 
     def _oculus_data_callback(self, data):
         """
@@ -197,6 +219,7 @@ class VRPolicy:
         policy_action.enable = self._state["movement_enabled"]
         self._publish_action(policy_action)
 
+
     def _robot_data_callback(self, data):
         """
         Callback function to handle incoming data from the robot pose subscriber.
@@ -215,6 +238,8 @@ class VRPolicy:
         """
         Publish the generated action.
         """
+        # import pdb; pdb.set_trace()
+        # publish_transform(action.target_cartesian_pos, self.action_publisher.name)
         self.action_publisher.publish(action)
 
     def run(self):
@@ -320,6 +345,8 @@ class VRPolicy:
         pos_action = target_pos_offset - robot_pos_offset
 
         # Calculate Euler Action #
+        # target: from gripper to world
+        # R.from_quat(target) * R.from_quat(source).inv() # world to world
         robot_quat_offset = quat_diff(robot_quat, self.robot_origin["quat"])
         target_quat_offset = quat_diff(self.vr_state["quat"], self.vr_origin["quat"])
 
@@ -329,7 +356,8 @@ class VRPolicy:
         # flip x z 
         # target_quat_offset = flip_xz_rot(target_quat_offset)
 
-        quat_action = quat_diff(robot_quat_offset, target_quat_offset)
+        # world to world 
+        quat_action = quat_diff(target_quat_offset, robot_quat_offset)
         euler_action = quat_to_euler(quat_action)
 
         # Calculate Gripper Action #
@@ -337,7 +365,11 @@ class VRPolicy:
 
         # Calculate Desired Pose #
         target_pos = pos_action + robot_pos
-        target_quat = add_quats(robot_quat, quat_action)
+        # def add_quats(delta, source):
+        #     result = R.from_quat(delta) * R.from_quat(source) # T_world_to_world * T_gripper_to_world
+        #     return result.as_quat()
+        # target_quat = add_quats(robot_quat, quat_action) # should the order here be swapped? i.e. add_quats(quat_action, robot_quat) TODO: Justin test the following line
+        target_quat = add_quats(quat_action, robot_quat)
         target_cartesian = np.concatenate([target_pos, target_quat])
         target_gripper = self.vr_state["gripper"]
 
