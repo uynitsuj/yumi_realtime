@@ -240,19 +240,20 @@ def main(
         
         l_gripper_target = data.target_gripper_pos # 0.0 to 1.0
         if bool(l_gripper_target):
-            # print("L gripper pressed")
-            if prev_gripper_L != 4:
+            if prev_gripper_L != 4 and data.enable:
                 set_io_signal("cmd_GripperState_L", "4")
+                time.sleep(0.1)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_L = 4
-                time.sleep(0.5)
+                time.sleep(0.15)
                 set_io_signal("RUN_SG_ROUTINE", "0")
         else:
-            if prev_gripper_L != 5:
-                print(set_io_signal("cmd_GripperState_L", "5"))
+            if prev_gripper_L != 5 and data.enable:
+                set_io_signal("cmd_GripperState_L", "5")
+                time.sleep(0.1)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_L = 5
-                time.sleep(0.5)
+                time.sleep(0.15)
                 set_io_signal("RUN_SG_ROUTINE", "0")
 
             
@@ -278,18 +279,20 @@ def main(
         
         r_gripper_target = data.target_gripper_pos # 0.0 to 1.0
         if bool(r_gripper_target):
-            if prev_gripper_R != 4:
+            if prev_gripper_R != 4 and data.enable:
                 set_io_signal("cmd_GripperState_R", "4")
+                time.sleep(0.1)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_R = 4
-                time.sleep(0.5)
+                time.sleep(0.15)
                 set_io_signal("RUN_SG_ROUTINE", "0")
         else:
-            if prev_gripper_R != 5:
+            if prev_gripper_R != 5 and data.enable:
                 set_io_signal("cmd_GripperState_R", "5")
+                time.sleep(0.1)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_R = 5
-                time.sleep(0.5)
+                time.sleep(0.15)
                 set_io_signal("RUN_SG_ROUTINE", "0")
             
                 
