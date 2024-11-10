@@ -41,59 +41,6 @@ def publish_transform(transform, name):
 
     br.sendTransform(t)
 
-
-def flip_xy(data: np.ndarray):
-    # Extract translation and quaternion
-    x, y, z, qx, qy, qz, qw = data
-    
-    # Flip the translation in the XY direction
-    flipped_translation = np.array([-x, -y, z])  # Flip x and y, leave z unchanged
-    
-    # Create the rotation from the quaternion
-    rotation = R.from_quat([qx, qy, qz, qw])
-    
-    # Create a rotation that flips the XY axis (180 degree rotation around Z)
-    flip_rotation = R.from_euler('z', 180, degrees=True)
-    
-    # Apply the flip rotation to the original rotation
-    flipped_rotation = flip_rotation * rotation
-    
-    # Get the new quaternion after applying the flip
-    flipped_quat = flipped_rotation.as_quat()
-    
-    # Return the new data with flipped XY translation and rotation
-    return np.array([flipped_translation[0], flipped_translation[1], flipped_translation[2], 
-                     flipped_quat[0], flipped_quat[1], flipped_quat[2], flipped_quat[3]])
-
-def flip_xy_quat(quat : np.ndarray):
-    # Create the rotation from the quaternion
-    rotation = R.from_quat(quat)
-    
-    # Create a rotation that flips the XY axis (180 degree rotation around Z)
-    flip_rotation = R.from_euler('z', 180, degrees=True)
-    
-    # Apply the flip rotation to the original rotation
-    flipped_rotation = flip_rotation * rotation
-    
-    # Get the new quaternion after applying the flip
-    flipped_quat = flipped_rotation.as_quat()
-    
-    return flipped_quat
-
-def flip_xy_trans(xyz : np.ndarray):
-    return np.array([-xyz[0], -xyz[1], xyz[2]])
-
-def flip_xz_rot(quat : np.ndarray):
-    rotation = R.from_quat(quat)
-    rot_xz = np.array([
-        [-1, 0, 0], 
-        [0, 1, 0], 
-        [0, 0, -1]
-    ])
-    rot_xz = R.from_matrix(rot_xz)
-    flipped_quat = rotation * rot_xz
-    return flipped_quat.as_quat()
-
 def parse_data(data : OculusData):
     """
     Parse the button data from the Oculus reader node.
@@ -163,7 +110,8 @@ class VRPolicy:
         pos_action_gain: float = 5,
         rot_action_gain: float = 2,
         gripper_action_gain: float = 3,
-        rmat_reorder: list = [-2, -1, -3, 4],
+        # rmat_reorder: list = [-2, -1, -3, 4], det = -1, inverts all rotation magnitudes
+        rmat_reorder: list = [2, 1, -3, 4],
     ):
         # Initialize the ROS node
         rospy.init_node('vr_policy_node', anonymous=True)
@@ -238,8 +186,6 @@ class VRPolicy:
         """
         Publish the generated action.
         """
-        # import pdb; pdb.set_trace()
-        # publish_transform(action.target_cartesian_pos, self.action_publisher.name)
         self.action_publisher.publish(action)
 
     def run(self):
@@ -298,7 +244,6 @@ class VRPolicy:
         vr_pos = self.spatial_coeff * rot_mat[:3, 3]
         vr_quat = rmat_to_quat(rot_mat[:3, :3])
         vr_gripper = self._state["buttons"]["rightTrig" if self.controller_id == "r" else "leftTrig"][0]
-
         self.vr_state = {"pos": vr_pos, "quat": vr_quat, "gripper": vr_gripper}
 
     def _limit_velocity(self, lin_vel, rot_vel, gripper_vel):
@@ -327,7 +272,6 @@ class VRPolicy:
             robot_pos = self._state["robot_pose"][:3, 3]
             robot_rmat = self._state["robot_pose"][:3, :3]
         robot_quat = rmat_to_quat(robot_rmat)
-        # robot_gripper = state_dict["gripper_position"]
 
         # Reset Origin On Release #
         if self.reset_origin:
@@ -339,36 +283,18 @@ class VRPolicy:
         robot_pos_offset = robot_pos - self.robot_origin["pos"]
         target_pos_offset = self.vr_state["pos"] - self.vr_origin["pos"]
 
-        # flip x y 
-        # target_pos_offset = flip_xy_trans(target_pos_offset)
-
         pos_action = target_pos_offset - robot_pos_offset
 
-        # Calculate Euler Action #
-        # target: from gripper to world
-        # R.from_quat(target) * R.from_quat(source).inv() # world to world
         robot_quat_offset = quat_diff(robot_quat, self.robot_origin["quat"])
         target_quat_offset = quat_diff(self.vr_state["quat"], self.vr_origin["quat"])
-
-        # flip x y 
-        # target_quat_offset = flip_xy_quat(target_quat_offset)
-
-        # flip x z 
-        # target_quat_offset = flip_xz_rot(target_quat_offset)
 
         # world to world 
         quat_action = quat_diff(target_quat_offset, robot_quat_offset)
         euler_action = quat_to_euler(quat_action)
 
-        # Calculate Gripper Action #
-        # gripper_action = (self.vr_state["gripper"] * 1.5) - robot_gripper
-
         # Calculate Desired Pose #
         target_pos = pos_action + robot_pos
-        # def add_quats(delta, source):
-        #     result = R.from_quat(delta) * R.from_quat(source) # T_world_to_world * T_gripper_to_world
-        #     return result.as_quat()
-        # target_quat = add_quats(robot_quat, quat_action) # should the order here be swapped? i.e. add_quats(quat_action, robot_quat) TODO: Justin test the following line
+
         target_quat = add_quats(quat_action, robot_quat)
         target_cartesian = np.concatenate([target_pos, target_quat])
         target_gripper = self.vr_state["gripper"]
@@ -376,10 +302,8 @@ class VRPolicy:
         # Scale Appropriately #
         pos_action *= self.pos_action_gain
         euler_action *= self.rot_action_gain
-        # gripper_action *= self.gripper_action_gain
         gripper_action = 0 # TODO fix this! 
         lin_vel, rot_vel, gripper_vel = self._limit_velocity(pos_action, euler_action, gripper_action)
-        # convert rotation velocity to quaternions 
         rot_vel = euler_to_quat(rot_vel)
         action = np.concatenate([np.clip(lin_vel, -1, 1), rot_vel])
         return {

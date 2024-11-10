@@ -27,7 +27,7 @@ except ImportError:
 
 import rospy
 from sensor_msgs.msg import JointState # sensor message type
-from abb_robot_msgs.srv import GetIOSignal, TriggerWithResultCode
+from abb_robot_msgs.srv import GetIOSignal, SetIOSignal, TriggerWithResultCode
 from abb_egm_msgs.msg import EGMState
 from std_msgs.msg import Float64, Float64MultiArray
 from controller_manager_msgs.srv import SwitchController
@@ -214,7 +214,12 @@ def main(
     print("Starting ROS Node")
     rospy.init_node('yumi_controller', anonymous=True)
     
+    get_io_signal = rospy.ServiceProxy('yumi/rws/get_io_signal', GetIOSignal)
+    set_io_signal = rospy.ServiceProxy('yumi/rws/set_io_signal', SetIOSignal)
+    prev_gripper_L = 0
+    prev_gripper_R = 0
     def control_l_callback(data):
+        nonlocal prev_gripper_L
         l_wxyz = onp.array(
             [data.target_cartesian_pos.transform.rotation.w,
             data.target_cartesian_pos.transform.rotation.x,
@@ -234,12 +239,25 @@ def main(
             frame_handle_left_target.wxyz = frame_handle_left_real.wxyz
         
         l_gripper_target = data.target_gripper_pos # 0.0 to 1.0
-        
         if bool(l_gripper_target):
-            # Set gripper target
-            print("L gripper pressed")
+            # print("L gripper pressed")
+            if prev_gripper_L != 4:
+                set_io_signal("cmd_GripperState_L", "4")
+                set_io_signal("RUN_SG_ROUTINE", "1")
+                prev_gripper_L = 4
+                time.sleep(0.5)
+                set_io_signal("RUN_SG_ROUTINE", "0")
+        else:
+            if prev_gripper_L != 5:
+                print(set_io_signal("cmd_GripperState_L", "5"))
+                set_io_signal("RUN_SG_ROUTINE", "1")
+                prev_gripper_L = 5
+                time.sleep(0.5)
+                set_io_signal("RUN_SG_ROUTINE", "0")
+
             
     def control_r_callback(data):
+        nonlocal prev_gripper_R
         r_wxyz = onp.array(
             [data.target_cartesian_pos.transform.rotation.w,
             data.target_cartesian_pos.transform.rotation.x,
@@ -259,13 +277,23 @@ def main(
             frame_handle_right_target.wxyz = frame_handle_right_real.wxyz
         
         r_gripper_target = data.target_gripper_pos # 0.0 to 1.0
-        
         if bool(r_gripper_target):
-            # Set gripper target
-            print("R gripper pressed")
+            if prev_gripper_R != 4:
+                set_io_signal("cmd_GripperState_R", "4")
+                set_io_signal("RUN_SG_ROUTINE", "1")
+                prev_gripper_R = 4
+                time.sleep(0.5)
+                set_io_signal("RUN_SG_ROUTINE", "0")
+        else:
+            if prev_gripper_R != 5:
+                set_io_signal("cmd_GripperState_R", "5")
+                set_io_signal("RUN_SG_ROUTINE", "1")
+                prev_gripper_R = 5
+                time.sleep(0.5)
+                set_io_signal("RUN_SG_ROUTINE", "0")
             
                 
-    rospy.Subscriber("/vr_policy/control_l", VRPolicyAction, control_l_callback)
+    rospy.Subscriber("/vr_policy/control_l", VRPolicyAction, control_l_callback) # Controls left YuMi Arm, may be right-handed controller
     rospy.Subscriber("/vr_policy/control_r", VRPolicyAction, control_r_callback)
     
     start_egm = rospy.ServiceProxy('/yumi/rws/sm_addin/start_egm_joint', TriggerWithResultCode)
@@ -288,11 +316,6 @@ def main(
             EGMActive = False
             start_egm_control()
             time.sleep(1)
-        if data.egm_channels[0].egm_convergence_met:
-            print("EGM Converged Left")
-        if data.egm_channels[1].egm_convergence_met:
-            print("EGM Converged Right")
-        
         
     rospy.Subscriber("yumi/egm/egm_states", EGMState, egm_state_callback)
 
@@ -315,7 +338,6 @@ def main(
             target_frame_handle.wxyz = onp.array(T_target_world.rotation().wxyz)
             
     def rws_ja_callback(data):
-        get_io_signal = rospy.ServiceProxy('yumi/rws/get_io_signal', GetIOSignal)
         
         gripper_L = get_io_signal("hand_ActualPosition_L")
         gripper_R = get_io_signal("hand_ActualPosition_R")
@@ -355,12 +377,6 @@ def main(
         frame_handle_right_real.position = onp.array(tf_right_real.translation())
         frame_handle_right_real.wxyz = onp.array(tf_right_real.rotation().wxyz)
         
-        # if read_sensors_first_time:
-        #     print("Publishing Left and Right End Effector Transforms")
-        #     tf_left_real_pub = rospy.Publisher("yumi/tf_left_real", TransformStamped, queue_size=10)
-        #     tf_right_real_pub = rospy.Publisher("yumi/tf_right_real", TransformStamped, queue_size=10)
-        #     read_sensors_first_time = False
-        
         l_transform_stamped = TransformStamped()
         r_transform_stamped = TransformStamped()
         
@@ -382,10 +398,6 @@ def main(
     
     has_jitted = False
     while True:
-        # Don't do anything if there are no target joints...
-        # if len(target_name_handles) == 0:
-        #     time.sleep(0.1)
-        #     continue
 
         target_joint_indices = jnp.array(
             [
