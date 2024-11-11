@@ -242,7 +242,7 @@ def main(
         if bool(l_gripper_target):
             if prev_gripper_L != 4 and data.enable:
                 set_io_signal("cmd_GripperState_L", "4")
-                time.sleep(0.1)
+                time.sleep(0.05)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_L = 4
                 time.sleep(0.15)
@@ -250,7 +250,7 @@ def main(
         else:
             if prev_gripper_L != 5 and data.enable:
                 set_io_signal("cmd_GripperState_L", "5")
-                time.sleep(0.1)
+                time.sleep(0.05)
                 set_io_signal("RUN_SG_ROUTINE", "1")
                 prev_gripper_L = 5
                 time.sleep(0.15)
