@@ -25,6 +25,13 @@ except ImportError:
     logger.info("sksparse not found. Some solvers may not work.")
     sksparse = None
 
+import rospy
+from sensor_msgs.msg import JointState # sensor message type
+from abb_robot_msgs.srv import GetIOSignal, TriggerWithResultCode
+from abb_egm_msgs.msg import EGMState
+from std_msgs.msg import Float64, Float64MultiArray
+from controller_manager_msgs.srv import SwitchController
+
 YUMI_REST_POSE = {
     "yumi_joint_1_r": 1.21442839,
     "yumi_joint_2_r": -1.03205606,
@@ -43,7 +50,7 @@ YUMI_REST_POSE = {
     "gripper_r_joint": 0, # 0.025,
     "gripper_l_joint": 0, # 0.025,
 }
-
+    
 def main(
     pos_weight: float = 5.0,
     rot_weight: float = 1.0,
@@ -80,6 +87,17 @@ def main(
     urdf_base_frame = server.scene.add_frame("/base", show_axes=False)
     urdf_vis = viser.extras.ViserUrdf(server, urdf, root_node_name="/base")
     urdf_vis.update_cfg(YUMI_REST_POSE)
+    
+    # Visualize real robot via connection to ROS.
+    urdf_vis_real = viser.extras.ViserUrdf(server, urdf, root_node_name="/base_real", mesh_color_override=(0.65, 0.5, 0.5))
+    urdf_vis_real.update_cfg(YUMI_REST_POSE)
+    for mesh in urdf_vis_real._meshes:
+        mesh.opacity = 0.4
+        
+
+    ja_mem = shared_memory.SharedMemory(create=True, size=14 * 4)  # 4 bytes for float32
+    ja_array = onp.ndarray((14,), dtype=onp.float32, buffer=ja_mem.buf)
+       
     server.scene.add_grid("ground", width=2, height=2, cell_size=0.1)
 
     # Add base-frame freezing logic.
@@ -145,6 +163,7 @@ def main(
 
     set_frames_to_current_pose = server.gui.add_button("Set frames to current pose")
     add_joint_button = server.gui.add_button("Add joint!")
+    start_egm_button = server.gui.add_button("Start EGM Control!")
 
     target_name_handles: list[viser.GuiDropdownHandle] = []
     target_tf_handles: list[viser.TransformControlsHandle] = []
@@ -181,7 +200,35 @@ def main(
 
     add_joint_button.on_click(lambda _: add_joint())
     add_joint()
+    
+    rospy.init_node('yumi_controller', anonymous=True)
 
+    start_egm = rospy.ServiceProxy('/yumi/rws/sm_addin/start_egm_joint', TriggerWithResultCode)
+    switch_controller = rospy.ServiceProxy('/yumi/egm/controller_manager/switch_controller', SwitchController)
+    # Start EGM joint control.
+    
+    EGMActive = False
+    def egm_state_callback(data):
+        if data.egm_channels[0].active and data.egm_channels[1].active:
+            EGMActive = True
+            print("EGM Active")
+        else:
+            EGMActive = False
+        if data.egm_channels[0].egm_convergence_met:
+            print("EGM Converged Left")
+        if data.egm_channels[1].egm_convergence_met:
+            print("EGM Converged Right")
+        
+    rospy.Subscriber("yumi/egm/egm_states", EGMState, egm_state_callback)
+    
+    def start_egm_control():
+        rospy.wait_for_service('/yumi/rws/sm_addin/start_egm_joint')
+        se_result = start_egm()
+        time.sleep(0.1)
+        sc_result = switch_controller(['joint_group_position_controller'],[''],3,True,0.0)
+        
+    start_egm_button.on_click(lambda _: start_egm_control())
+    
     # Let the user change the size of the transformcontrol gizmo.
     @tf_size_handle.on_update
     def _(_):
@@ -213,6 +260,35 @@ def main(
             target_frame_handle.wxyz = onp.array(T_target_world.rotation().wxyz)
             target_tf_handle.position = onp.array(T_target_world.translation())
             target_tf_handle.wxyz = onp.array(T_target_world.rotation().wxyz)
+
+    YUMI_CURR_POSE = {}
+    def rws_ja_callback(data):
+        get_io_signal = rospy.ServiceProxy('yumi/rws/get_io_signal', GetIOSignal)
+        
+        gripper_L = get_io_signal("hand_ActualPosition_L")
+        gripper_R = get_io_signal("hand_ActualPosition_R")
+        
+        YUMI_CURR_POSE = {
+            "yumi_joint_1_r": data.position[0],
+            "yumi_joint_2_r": data.position[1],
+            "yumi_joint_7_r": data.position[2],
+            "yumi_joint_3_r": data.position[3],
+            "yumi_joint_4_r": data.position[4],
+            "yumi_joint_5_r": data.position[5],
+            "yumi_joint_6_r": data.position[6],
+            "yumi_joint_1_l": data.position[7],
+            "yumi_joint_2_l": data.position[8],
+            "yumi_joint_7_l": data.position[9],
+            "yumi_joint_3_l": data.position[10],
+            "yumi_joint_4_l": data.position[11],
+            "yumi_joint_5_l": data.position[12],
+            "yumi_joint_6_l": data.position[13],
+            "gripper_r_joint": int(gripper_R.value)/10000,
+            "gripper_l_joint": int(gripper_L.value)/10000,
+        }
+        
+        urdf_vis_real.update_cfg(YUMI_CURR_POSE)
+    
 
     has_jitted = False
     while True:
@@ -269,8 +345,13 @@ def main(
         jax.block_until_ready((base_pose, joints))
         timing_handle.value = (time.time() - start_time) * 1000
         if not has_jitted:
-            logger.info("JIT compile + runing took {} ms.", timing_handle.value)
+            logger.info("JIT compile + running took {} ms.", timing_handle.value)
             has_jitted = True
+            rospy.Subscriber("yumi/rws/joint_states", JointState, rws_ja_callback)
+            joint_vel_pub = rospy.Publisher("yumi/egm/joint_group_position_controller/command", Float64MultiArray, queue_size=10)
+            r = rospy.Rate(100) # 250hz
+
+
 
         # Update visualizations.
         urdf_base_frame.position = onp.array(base_pose.translation())
@@ -292,6 +373,16 @@ def main(
         manip_cost /= len(target_joint_indices)
         manipulability_cost_handler.value = onp.array(manip_cost).item()
 
+        joint_desired = onp.array([
+            joints[7], joints[8], joints[9], joints[10], joints[11], joints[12], joints[13],
+            joints[0], joints[1], joints[2], joints[3], joints[4], joints[5], joints[6]
+        ], dtype=onp.float32)
+        
+        ja_msg = Float64MultiArray()
+        ja_msg.data = joint_desired[0:14]
+        joint_vel_pub.publish(ja_msg)
+        # print(ja_msg.data)
+        r.sleep()
 
 if __name__ == "__main__":
     tyro.cli(main)

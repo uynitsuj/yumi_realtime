@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yumi_ros_noetic"
 version = "0.0.1"
-description = "YuMi Externally Guided Motion (EGM) wrapper interfaced with ROS noetic"
+description = "YuMi Externally Guided Motion (EGM) wrapper"
 authors = [
     {name = "Justin Yu", email = "yujustin@berkeley.edu"},
 ]
@@ -14,10 +14,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    #"autolab-core",
-    "viser"
-    "tyro"
+    "viser",
+    "tyro",
 ]
 
-[tool.setuptools]
-packages = ["yumi_ros_noetic"]
+[tool.setuptools.packages.find]
+exclude = ["catkin_ws*"]
