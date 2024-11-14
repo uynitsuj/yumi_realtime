@@ -1,4 +1,4 @@
-from yumi_ros_noetic.yumi_ros_noetic.controller import YuMiROSInterface
+from yumi_ros_noetic.controller import YuMiROSInterface
 from yumi_ros_noetic.base import TransformHandle
 from loguru import logger
 import viser
@@ -6,9 +6,12 @@ import jax.numpy as jnp
 import jaxlie
 import numpy as onp
 import time
+import tyro
+from typing import Literal
 
 import rospy
 from vr_policy.msg import VRPolicyAction
+from yumi_ros_noetic.oculus_control.utils.vr_control import VRPolicy
 
 class YuMiOculusInterface(YuMiROSInterface):
     """YuMi interface with Oculus VR control."""
@@ -77,6 +80,21 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
 
-if __name__ == "__main__":
+def main(
+    controller : Literal["r", "l", "rl"] = "rl", # left and right controller
+    ): 
+    
     yumi_interface = YuMiOculusInterface()
+    
+    if "r" in controller: 
+        logger.info("Start right controller")
+        right_policy = VRPolicy(right_controller=True)
+    if "l" in controller:
+        logger.info("Start left controller")
+        left_policy = VRPolicy(right_controller=False)
+        
     yumi_interface.run()
+    
+    
+if __name__ == "__main__":
+    tyro.cli(main)

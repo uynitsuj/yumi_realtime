@@ -41,19 +41,14 @@ python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
 
 ### Oculus VR Controller Tele-Operation Control
 
-Open 3 additional terminals for 1. Oculus input reader node 2. Oculus control publisher 3. Viser live UI and robot controller
+Open 3 additional terminals for 1. Oculus input reader node 2. Viser live UI and robot controller
 
-1. Oculus input reader node
+1. Oculus device reader node
 ```bash
-python ~/yumi_ros_noetic/catkin_ws/src/vr_policy/src/oculus_node.py
+python ~/yumi_ros_noetic/yumi_ros_noetic/oculus_control/utils/oculus_node.py
 ```
 
-2. Oculus control publisher
+2. Viser live UI and robot controller interface
 ```bash
-python ~/yumi_ros_noetic/catkin_ws/src/vr_policy/src/vr_control.py
-```
-
-3. Viser live UI and robot controller interface
-```bash
-python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
+python ~/yumi_ros_noetic/yumi_ros_noetic/oculus_control/oculus_control.py
 ```
