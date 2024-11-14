@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import jaxlie
 import numpy as onp
 import time
+import threading
 
 import rospy
 from sensor_msgs.msg import JointState
@@ -22,6 +23,10 @@ class YuMiROSInterface(YuMiBaseInterface):
         super().__init__(*args, **kwargs)
         
         self.ros_initialized = False
+        self._first_js_callback = True
+        self._interactive_handles = True
+        self._js_update_lock = threading.Lock()
+        
         try:
             rospy.init_node('yumi_controller', anonymous=True)
             
@@ -67,6 +72,13 @@ class YuMiROSInterface(YuMiBaseInterface):
                 JointState, 
                 self._joint_state_callback
             )
+            rospy.Subscriber(
+                "yumi/egm/joint_states", 
+                JointState, 
+                self._joint_state_callback,
+                queue_size=1
+            )
+            self.egm_js_counter = 0
             rospy.Subscriber(
                 "yumi/egm/egm_states", 
                 EGMState, 
@@ -138,68 +150,119 @@ class YuMiROSInterface(YuMiBaseInterface):
             )
         except Exception as e:
             logger.error(f"Failed to start EGM control: {e}")
-            
+    
+    def _map_egm_joints(self, data: JointState):
+        joints_real = {
+                    "yumi_joint_1_r": data.position[7],
+                    "yumi_joint_2_r": data.position[8],
+                    "yumi_joint_7_r": data.position[9],
+                    "yumi_joint_3_r": data.position[10],
+                    "yumi_joint_4_r": data.position[11],
+                    "yumi_joint_5_r": data.position[12],
+                    "yumi_joint_6_r": data.position[13],
+                    "yumi_joint_1_l": data.position[0],
+                    "yumi_joint_2_l": data.position[1],
+                    "yumi_joint_7_l": data.position[2],
+                    "yumi_joint_3_l": data.position[3],
+                    "yumi_joint_4_l": data.position[4],
+                    "yumi_joint_5_l": data.position[5],
+                    "yumi_joint_6_l": data.position[6],
+                    "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
+                    "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
+                }
+       
+        return joints_real
+    
+    def _map_rws_joints(self, data: JointState):
+        joints_real = {
+                    "yumi_joint_1_r": data.position[0],
+                    "yumi_joint_2_r": data.position[1],
+                    "yumi_joint_7_r": data.position[2],
+                    "yumi_joint_3_r": data.position[3],
+                    "yumi_joint_4_r": data.position[4],
+                    "yumi_joint_5_r": data.position[5],
+                    "yumi_joint_6_r": data.position[6],
+                    "yumi_joint_1_l": data.position[7],
+                    "yumi_joint_2_l": data.position[8],
+                    "yumi_joint_7_l": data.position[9],
+                    "yumi_joint_3_l": data.position[10],
+                    "yumi_joint_4_l": data.position[11],
+                    "yumi_joint_5_l": data.position[12],
+                    "yumi_joint_6_l": data.position[13],
+                    "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
+                    "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
+                }
+        return joints_real
+    
     def _joint_state_callback(self, data: JointState):
         """Handle joint state updates from the real robot."""
         try:
-            # Get gripper states
-            gripper_L = self.get_io("hand_ActualPosition_L")
-            gripper_R = self.get_io("hand_ActualPosition_R")
-            
-            # Update real robot joint configuration
-            joints_real = {
-                "yumi_joint_1_r": data.position[0],
-                "yumi_joint_2_r": data.position[1],
-                "yumi_joint_7_r": data.position[2],
-                "yumi_joint_3_r": data.position[3],
-                "yumi_joint_4_r": data.position[4],
-                "yumi_joint_5_r": data.position[5],
-                "yumi_joint_6_r": data.position[6],
-                "yumi_joint_1_l": data.position[7],
-                "yumi_joint_2_l": data.position[8],
-                "yumi_joint_7_l": data.position[9],
-                "yumi_joint_3_l": data.position[10],
-                "yumi_joint_4_l": data.position[11],
-                "yumi_joint_5_l": data.position[12],
-                "yumi_joint_6_l": data.position[13],
-                "gripper_r_joint": int(gripper_R.value)/10000,
-                "gripper_l_joint": int(gripper_L.value)/10000,
-            }
-            
-            # Update real robot visualization
-            self.urdf_vis_real.update_cfg(joints_real)
-            
-            # Update real robot transform frames
-            joints_array = jnp.array(list(joints_real.values()), dtype=jnp.float32)
-            fk_frames = self.kin.forward_kinematics(joints_array)
-            
-            for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
-                joint_idx = self.kin.joint_names.index(joint_name)
-                T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
+            with self._js_update_lock:
+                # Get gripper states
+                if len(data.velocity) == 0: # RWS joint states subscriber runs at ~5Hz
+                    self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
+                    self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
                 
-                # Update transform handles
-                self.real_transform_handles[side].frame.position = onp.array(T_target_world.translation())
-                self.real_transform_handles[side].frame.wxyz = onp.array(T_target_world.rotation().wxyz)
+                    # Update real robot joint configuration    
+                    joints_real = self._map_rws_joints(data)
+                else: # EGM joint states subscriber runs at 250Hz
+                    self.egm_js_counter += 1
+                    if self.egm_js_counter % 2 == 0:
+                        self.egm_js_counter = 0
+                        return 0
+                    if self._first_js_callback: # Called at 250Hz -- don't want to overload gripper state request interrupts
+                        self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
+                        self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
+
+                    joints_real = self._map_egm_joints(data)
                 
-                # Publish TF
-                tf_msg = TransformStamped(
-                    header=Header(stamp=rospy.Time.now()),
-                    transform=Transform(
-                        translation=Vector3(*T_target_world.translation()),
-                        rotation=Quaternion(
-                            x=T_target_world.rotation().wxyz[1],
-                            y=T_target_world.rotation().wxyz[2],
-                            z=T_target_world.rotation().wxyz[3],
-                            w=T_target_world.rotation().wxyz[0]
+                # Update real robot visualization
+                self.urdf_vis_real.update_cfg(joints_real)
+                
+                # Update real robot transform frames
+                joints_array = jnp.array(list(joints_real.values()), dtype=jnp.float32)
+                fk_frames = self.kin.forward_kinematics(joints_array)
+                
+                for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+                    joint_idx = self.kin.joint_names.index(joint_name)
+                    T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
+                    
+                    # Update transform handles
+                    self.real_transform_handles[side].frame.position = onp.array(T_target_world.translation())
+                    self.real_transform_handles[side].frame.wxyz = onp.array(T_target_world.rotation().wxyz)
+                    
+                    # Publish TF
+                    tf_msg = TransformStamped(
+                        header=Header(stamp=rospy.Time.now()),
+                        transform=Transform(
+                            translation=Vector3(*T_target_world.translation()),
+                            rotation=Quaternion(
+                                x=T_target_world.rotation().wxyz[1],
+                                y=T_target_world.rotation().wxyz[2],
+                                z=T_target_world.rotation().wxyz[3],
+                                w=T_target_world.rotation().wxyz[0]
+                            )
                         )
                     )
-                )
-                
-                if side == 'left':
-                    self.tf_left_pub.publish(tf_msg)
-                else:
-                    self.tf_right_pub.publish(tf_msg)
                     
+                    if side == 'left':
+                        self.tf_left_pub.publish(tf_msg)
+                    else:
+                        self.tf_right_pub.publish(tf_msg)
+                    
+                    if self._first_js_callback:
+                        logger.info(f"Received first joint state update: {joints_real}")
+                        self.update_target_pose(
+                            side=side,
+                            position=onp.array(T_target_world.translation()),
+                            wxyz=onp.array(T_target_world.rotation().wxyz),
+                            gripper_state=False,
+                            enable=False
+                        )
+                        if side == 'right':
+                            self._first_js_callback = False
+                    
+                        
         except Exception as e:
             logger.error(f"Error in joint state callback: {e}")
             
@@ -234,7 +297,8 @@ class YuMiROSInterface(YuMiBaseInterface):
             target_handle.frame.position = position
             target_handle.frame.wxyz = wxyz
             if target_handle.control:  # Update transform controls if they exist
-                target_handle.control.visible = False
+                if not self._interactive_handles:
+                    target_handle.control.visible = False
                 target_handle.control.position = position
                 target_handle.control.wxyz = wxyz
         else:
@@ -242,7 +306,8 @@ class YuMiROSInterface(YuMiBaseInterface):
             target_handle.frame.position = real_handle.position
             target_handle.frame.wxyz = real_handle.wxyz
             if target_handle.control:
-                target_handle.control.visible = False
+                if not self._interactive_handles:
+                    target_handle.control.visible = False
                 target_handle.control.position = real_handle.position
                 target_handle.control.wxyz = real_handle.wxyz
                 
@@ -274,7 +339,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                     
     def run(self):
         """Override main run loop to include ROS control."""
-        rate = rospy.Rate(50)  # 50Hz control loop
+        rate = rospy.Rate(150)  # 150Hz control loop
         
         while not rospy.is_shutdown():
             # Run base class IK and visualization updates

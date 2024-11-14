@@ -1,4 +1,4 @@
-from yumi_ros_noetic.ros_interface import YuMiROSInterface
+from yumi_ros_noetic.yumi_ros_noetic.controller import YuMiROSInterface
 from yumi_ros_noetic.base import TransformHandle
 from loguru import logger
 import viser
@@ -15,6 +15,7 @@ class YuMiOculusInterface(YuMiROSInterface):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._interactive_handles = False
         
         # Setup Oculus control subscribers
         rospy.Subscriber(
