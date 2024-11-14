@@ -22,18 +22,6 @@ rostopic echo /yumi/rws/joint_states
 ```
 
 ## Step 2: Choose your desired control interface and run script
-The following real-time control interfaces are currently supported by this repository:
-- Viser Control
-
-A web visual interface with Inverse Kinematics via [jaxmp](https://github.com/chungmin99/jaxmp) and interactive transform handles (similar to moveit's interface but this can be visualized over remote SSH with Viser)
-
-If you simply wish to view a real-time visualization of the current robot joint angle readings on a YuMi urdf, run this [script](control_interfaces/viser_control/viz_joint_angles.py)
-
-- Oculus VR Controller Tele-Operation Control
-
-(Work In Progress)
-
-
 Activate a new terminal and activate the `yumiegmros` env and source the ROS workspace again
 ```bash
 conda activate yumiegmros
@@ -41,4 +29,31 @@ cd ~/yumi_ros_noetic/
 . catkin_ws/devel/setup.bash
 ```
 
-Then run the control interface python script.
+The following real-time control interfaces are currently supported by this repository:
+
+- Viser Control
+
+A web visual interface with interactive transform handles (similar to moveit's interactive interface but this can be visualized over remote SSH with Viser)
+
+```bash
+python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
+```
+
+- Oculus VR Controller Tele-Operation Control
+
+Open 3 additional terminals for 1. Oculus input reader node 2. Oculus control publisher 3. Viser live UI and robot controller
+
+1. Oculus input reader node
+```bash
+python ~/yumi_ros_noetic/catkin_ws/src/vr_policy/src/oculus_node.py
+```
+
+2. Oculus control publisher
+```bash
+python ~/yumi_ros_noetic/catkin_ws/src/vr_policy/src/vr_control.py
+```
+
+3. Viser live UI and robot controller interface
+```bash
+python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
+```
