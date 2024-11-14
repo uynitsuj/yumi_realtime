@@ -1,7 +1,10 @@
 # YuMi ROS Noetic Interface
 
-A collection of realtime control interfaces with the bi-manual ABB YuMi IRB14000 using EGM (Externally Guided Motion) low-level control and a ROS Noetic wrapper.
+A collection of realtime control interfaces for the bi-manual ABB YuMi IRB14000 robot arm using Robot Web Services (RWS) and Externally Guided Motion (EGM) low-level control and a ROS Noetic wrapper.
 
+Available control interfaces include:
+1. Interactive Viser Interface
+2. Meta Quest Oculus VR Tele-operation control
 
 ![VR_Control](data/media/YuMiTeleopVR.gif)
 Oculus VR Controllers Tele-operating the YuMi
