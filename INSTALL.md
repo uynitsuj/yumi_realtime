@@ -34,6 +34,13 @@ conda config --env --add channels robostack-staging
 # remove the defaults channel just in case, this might return an error if it is not in the list which is ok
 conda config --env --remove channels defaults
 ```
+
+## Install yumi_ros_noetic
+```bash
+cd ~/yumi_ros_noetic
+python -m pip install -e .
+```
+
 ## Install ROS Noetic into the environment
 ```bash
 mamba install ros-noetic-desktop
