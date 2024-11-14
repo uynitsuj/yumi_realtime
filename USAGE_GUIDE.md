@@ -31,7 +31,7 @@ cd ~/yumi_ros_noetic/
 
 The following real-time control interfaces are currently supported by this repository:
 
-- Viser Control
+### Viser Control
 
 A web visual interface with interactive transform handles (similar to moveit's interactive interface but this can be visualized over remote SSH with Viser)
 
@@ -39,7 +39,7 @@ A web visual interface with interactive transform handles (similar to moveit's i
 python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
 ```
 
-- Oculus VR Controller Tele-Operation Control
+### Oculus VR Controller Tele-Operation Control
 
 Open 3 additional terminals for 1. Oculus input reader node 2. Oculus control publisher 3. Viser live UI and robot controller
 
