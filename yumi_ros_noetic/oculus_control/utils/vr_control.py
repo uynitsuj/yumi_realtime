@@ -320,17 +320,3 @@ class VRPolicy:
             "movement_enabled": self._state["movement_enabled"],
             "controller_on": self._state["controller_on"],
         }
-
-def main(
-    controller : Literal["r", "l", "rl"] = "rl", # left and right controller
-): 
-    if "r" in controller: 
-        print("start right controller")
-        right_policy = VRPolicy(right_controller=True)
-    if "l" in controller:
-        print("start left controller")
-        left_policy = VRPolicy(right_controller=False)
-    rospy.spin()
-
-if __name__ == "__main__":
-    tyro.cli(main)

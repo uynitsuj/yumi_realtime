@@ -347,7 +347,9 @@ class YuMiROSInterface(YuMiBaseInterface):
             super().update_visualization()
             
             # Publish joint commands
-            # Need to flip arm order for actual robot
+            # Need to flip arm order for actual robot control
+            if self._first_js_callback:
+                continue
             joint_desired = onp.array([
                 self.joints[7], self.joints[8], self.joints[9],    # Left arm first
                 self.joints[10], self.joints[11], self.joints[12], self.joints[13],
