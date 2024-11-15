@@ -112,9 +112,11 @@ class VRPolicy:
         gripper_action_gain: float = 3,
         # rmat_reorder: list = [-2, -1, -3, 4], det = -1, inverts all rotation magnitudes
         rmat_reorder: list = [2, 1, -3, 4],
+        init_node: bool = False
     ):
         # Initialize the ROS node
-        # rospy.init_node('vr_policy_node', anonymous=True)
+        if init_node:
+            rospy.init_node('vr_policy_node', anonymous=True)
         
         self._state_lock = threading.Lock()
         self.oculus_reader = OculusReader()

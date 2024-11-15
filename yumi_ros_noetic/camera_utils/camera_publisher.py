@@ -5,14 +5,23 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo
 
 class CameraPublisher:
-    def __init__(self):
-        rospy.init_node('camera_publisher', anonymous=True)
+    def __init__(
+        self, 
+        device_id: int=0,
+        name: str='camera_0',
+        init_node: bool=False
+        ):
+        
+        if init_node:
+            rospy.init_node('camera_publisher', anonymous=True)
+        
+        self.name = name
         
         # Initialize the CvBridge class
         self.bridge = CvBridge()
         
         # Initialize the camera
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(device_id)
         if not self.cap.isOpened():
             rospy.logerr("Failed to open camera!")
             return
@@ -42,7 +51,7 @@ class CameraPublisher:
                     
                     # Add header timestamp
                     ros_image.header.stamp = rospy.Time.now()
-                    ros_image.header.frame_id = "camera"
+                    ros_image.header.frame_id = self.name
                     
                     # Publish the image
                     self.image_pub.publish(ros_image)
