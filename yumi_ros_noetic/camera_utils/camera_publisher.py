@@ -9,6 +9,8 @@ class CameraPublisher:
         self, 
         device_id: int=0,
         name: str='camera_0',
+        image_height: int=480,
+        image_width: int=848,
         init_node: bool=False
         ):
         
@@ -25,12 +27,17 @@ class CameraPublisher:
         if not self.cap.isOpened():
             rospy.logerr("Failed to open camera!")
             return
-            
-        # Get camera properties
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
         
+        self.height = image_height 
+        self.width = image_width 
+        self.fps = 30
+
+        self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0) # turn the autofocus off
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
         # Create publishers
         self.image_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
         
@@ -68,7 +75,7 @@ class CameraPublisher:
 
 if __name__ == '__main__':
     try:
-        camera_pub = CameraPublisher()
+        camera_pub = CameraPublisher(init_node=True)
         camera_pub.run()
     except rospy.ROSInterruptException:
         pass

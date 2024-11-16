@@ -31,7 +31,7 @@ class YuMiOculusInterface(YuMiROSInterface):
         
         logger.info("VR control interface initialized")
         
-    def _control_l_callback(self, data: 'VRPolicyAction'):
+    def _control_l_callback(self, data):
         """Handle left controller updates."""
         l_wxyz = onp.array([
             data.target_cartesian_pos.transform.rotation.w,
@@ -53,7 +53,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
-    def _control_r_callback(self, data: 'VRPolicyAction'):
+    def _control_r_callback(self, data):
         """Handle right controller updates."""
         r_wxyz = onp.array([
             data.target_cartesian_pos.transform.rotation.w,

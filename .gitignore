@@ -8,6 +8,7 @@
 *.catkin_workspace
 *.catkin_tools
 /dependencies/*
+trajectories/*
 
 *.egg-info
 

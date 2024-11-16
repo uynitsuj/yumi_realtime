@@ -10,7 +10,7 @@ import threading
 import rospy
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TransformStamped, Transform, Vector3, Quaternion
-from std_msgs.msg import Float64MultiArray, Header
+from std_msgs.msg import Float64MultiArray, Header, String, Float64
 from abb_robot_msgs.srv import GetIOSignal, SetIOSignal, TriggerWithResultCode
 from controller_manager_msgs.srv import SwitchController
 from abb_egm_msgs.msg import EGMState
@@ -50,6 +50,11 @@ class YuMiROSInterface(YuMiBaseInterface):
                 "yumi/tf_right_real", 
                 TransformStamped, 
                 queue_size=10
+            )
+            self.ja_combined_pub = rospy.Publisher(
+                "/yumi/combined/joint_states",
+                JointState,
+                queue_size=10              
             )
             
             # Setup services
@@ -170,7 +175,15 @@ class YuMiROSInterface(YuMiBaseInterface):
                     "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
                     "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
                 }
+        js_data_struct = JointState()
+        js_data_struct.header = Header()
+        js_data_struct.header.stamp = data.header.stamp
+        js_data_struct.name = list(joints_real.keys())
+        js_data_struct.position = list(joints_real.values())
+        js_data_struct.velocity = list(data.velocity)[7:14] + list(data.velocity)[0:7]
        
+        self.ja_combined_pub.publish(js_data_struct)
+        
         return joints_real
     
     def _map_rws_joints(self, data: JointState):
@@ -192,6 +205,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                     "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
                     "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
                 }
+        
         return joints_real
     
     def _joint_state_callback(self, data: JointState):
@@ -202,19 +216,20 @@ class YuMiROSInterface(YuMiBaseInterface):
                 if len(data.velocity) == 0: # RWS joint states subscriber runs at ~5Hz
                     self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
                     self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
-                
+                                    
                     # Update real robot joint configuration    
                     joints_real = self._map_rws_joints(data)
                 else: # EGM joint states subscriber runs at 250Hz
-                    self.egm_js_counter += 1
-                    if self.egm_js_counter % 2 == 0:
-                        self.egm_js_counter = 0
-                        return 0
-                    if self._first_js_callback: # Called at 250Hz -- don't want to overload gripper state request interrupts
+                    if not self._first_js_callback:
+                        joints_real = self._map_egm_joints(data)
+                        self.egm_js_counter += 1
+                        if self.egm_js_counter % 2 == 0:
+                            self.egm_js_counter = 0
+                            return 0
+                    else:
                         self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
                         self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
-
-                    joints_real = self._map_egm_joints(data)
+                        return 0
                 
                 # Update real robot visualization
                 self.urdf_vis_real.update_cfg(joints_real)
@@ -261,7 +276,6 @@ class YuMiROSInterface(YuMiBaseInterface):
                         )
                         if side == 'right':
                             self._first_js_callback = False
-                    
                         
         except Exception as e:
             logger.error(f"Error in joint state callback: {e}")
@@ -274,7 +288,7 @@ class YuMiROSInterface(YuMiBaseInterface):
             self.egm_active = False
             self.start_egm_control()
             rospy.sleep(1.0)
-        
+    
     def update_target_pose(self, side: str, position: onp.ndarray, wxyz: onp.ndarray, gripper_state: bool, enable: bool):
         """Update target pose and gripper state for a given arm.
         
@@ -339,7 +353,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                     
     def run(self):
         """Override main run loop to include ROS control."""
-        rate = rospy.Rate(150)  # 150Hz control loop
+        rate = rospy.Rate(150)  # 150Hz control loop          
         
         while not rospy.is_shutdown():
             # Run base class IK and visualization updates

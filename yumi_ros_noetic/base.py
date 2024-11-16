@@ -48,12 +48,14 @@ class YuMiBaseInterface:
 
     def __init__(
         self,
+        minimal: bool = False,
         pos_weight: float = 5.0,
         rot_weight: float = 1.0,
         rest_weight: float = 0.01,
         limit_weight: float = 100.0,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
+        self.minimal = minimal
         # Set device
         jax.config.update("jax_platform_name", device)
 
@@ -79,23 +81,26 @@ class YuMiBaseInterface:
         
         # Setup visualization
         self._setup_visualization()
-        self._setup_gui()
-        self._setup_transform_handles()
+        
+        if not minimal:
+            self._setup_gui()
+            self._setup_transform_handles()
         
         # Initialize state
         self.base_pose = jaxlie.SE3.identity()
         self.base_frame.position = onp.array(self.base_pose.translation())
         self.base_frame.wxyz = onp.array(self.base_pose.rotation().wxyz)
         
-        # Initialize solver parameters
-        self.solver_type = "conjugate_gradient"
-        self.smooth = True
-        self.manipulability_weight = 0.0
-        self.has_jitted = False
-        
-        
-        self.base_mask, self.target_mask = self.get_freeze_masks()
-        self.ConstrainedSE3Var = RobotFactors.get_constrained_se3(self.base_mask)
+        if not minimal:
+            # Initialize solver parameters
+            self.solver_type = "conjugate_gradient"
+            self.smooth = True
+            self.manipulability_weight = 0.0
+            self.has_jitted = False
+            
+            
+            self.base_mask, self.target_mask = self.get_freeze_masks()
+            self.ConstrainedSE3Var = RobotFactors.get_constrained_se3(self.base_mask)
         
     def _setup_visualization(self):
         """Setup basic visualization elements."""
