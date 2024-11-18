@@ -113,9 +113,8 @@ def main(
         fig = np_to_plotly(im[slider_handle.value])
         fig_handle.figure = fig
         
-        print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
-        print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)
-        print("Difference:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9 - f['action/joint/timestamp'][slider_handle.value][0]/1e9)
+        # print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
+        # print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)
         
     while True:
         time.sleep(0.1)

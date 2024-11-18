@@ -96,7 +96,6 @@ class DataCollector:
             joint_positions = closest_joint_state.position
             joint_velocities = closest_joint_state.velocity
             
-            
             if len(joint_velocities) == 0:
                 joint_velocities = [0.0]*14 # MAY NEED TO HANDLE DIFFERENTLY -- NO VEL MIGHT NOT MEAN ZERO VEL
             
