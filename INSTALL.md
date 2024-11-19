@@ -3,7 +3,7 @@ Full install tested on Ubuntu 22.04 ROS Noetic in mamba-forge environment.
 
 ```
 cd ~/
-git clone --recurse-submodules https://github.com/uynitsuj/yumi_ros_noetic.git
+git clone --recurse-submodules https://github.com/uynitsuj/yumi_realtime.git
 ```
 
 ## Install Mamba-Forge
@@ -35,9 +35,9 @@ conda config --env --add channels robostack-staging
 conda config --env --remove channels defaults
 ```
 
-## Install yumi_ros_noetic
+## Install yumi_realtime
 ```bash
-cd ~/yumi_ros_noetic
+cd ~/yumi_realtime
 python -m pip install -e .
 ```
 
@@ -63,21 +63,21 @@ Should start a roscore instance
 
 ```bash
 # Change to the root of the Catkin workspace.
-cd ~/yumi_ros_noetic/catkin_ws/src
+cd ~/yumi_realtime/catkin_ws/src
 
 git clone https://github.com/ros-industrial/abb_robot_driver_interfaces.git
 
 mamba install protobuf ros-noetic-controller-manager ros-noetic-joint-state-controller ros-noetic-velocity-controllers ros-noetic-position-controllers ros-noetic-controller-manager-msgs ros-noetic-hardware-interface ros-noetic-joint-limits-interface ros-noetic-controller-interface ros-noetic-realtime-tools
 
 # Finally build the workspace (may take a minute)
-cd ~/yumi_ros_noetic/catkin_ws
+cd ~/yumi_realtime/catkin_ws
 catkin build
 ```
 Clean install should result in no error messages
 
 Finally, activate the workspace to get access to the packages just built:
 ```bash
-source ~/yumi_ros_noetic/catkin_ws/devel/setup.bash
+source ~/yumi_realtime/catkin_ws/devel/setup.bash
 ```
 
 ## Test YuMi launch
@@ -92,7 +92,7 @@ If linking issues with libabb_libegm.so or libprotobuf.so occur try adding to th
 <launch>
 
   # export paths to shared libraries in 
-  <env name="LD_LIBRARY_PATH" value="/home/<user>/catkin_ws/devel_isolated/abb_libegm/lib:/home/<user>/miniforge3/envs/yumiegmros/lib:${LD_LIBRARY_PATH}" />
+  <env name="LD_LIBRARY_PATH" value="/home/<user>/catkin_ws/devel/abb_libegm/lib:/home/<user>/miniforge3/envs/yumiegmros/lib:${LD_LIBRARY_PATH}" />
   <arg name="robot_ip" doc="The robot controller's IP address"/>
 ```
 

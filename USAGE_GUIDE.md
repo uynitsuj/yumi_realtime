@@ -9,7 +9,7 @@ If the below guide does not work, go through the following checks:
 ## Step 1: Source ROS workspace and launch the YuMi bringup script
 ```bash
 conda activate yumiegmros
-cd ~/yumi_ros_noetic/
+cd ~/yumi_realtime/
 . catkin_ws/devel/setup.bash
 
 roslaunch abb_robot_bringup yumi_robot.launch
@@ -25,7 +25,7 @@ rostopic echo /yumi/rws/joint_states
 Activate a new terminal and activate the `yumiegmros` env and source the ROS workspace again
 ```bash
 conda activate yumiegmros
-cd ~/yumi_ros_noetic/
+cd ~/yumi_realtime/
 . catkin_ws/devel/setup.bash
 ```
 
@@ -36,7 +36,7 @@ The following real-time control interfaces are currently supported by this repos
 A web visual interface with interactive transform handles (similar to moveit's interactive interface but this can be visualized over remote SSH with Viser)
 
 ```bash
-python ~/yumi_ros_noetic/yumi_ros_noetic/controller.py
+python ~/yumi_realtime/yumi_realtime/controller.py
 ```
 
 ### Oculus VR Controller Tele-Operation Control
@@ -45,10 +45,10 @@ Open 2 additional terminals for 1. Oculus input reader node 2. Viser live UI and
 
 1. Oculus device reader node
 ```bash
-python ~/yumi_ros_noetic/yumi_ros_noetic/oculus_control/utils/oculus_node.py
+python ~/yumi_realtime/yumi_realtime/oculus_control/utils/oculus_node.py
 ```
 
 2. Viser live UI and robot controller interface
 ```bash
-python ~/yumi_ros_noetic/yumi_ros_noetic/oculus_control/oculus_control.py
+python ~/yumi_realtime/yumi_realtime/oculus_control/oculus_control.py
 ```
