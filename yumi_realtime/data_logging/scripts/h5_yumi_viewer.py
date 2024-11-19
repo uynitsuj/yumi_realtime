@@ -5,7 +5,7 @@ import viser.extras
 import numpy as np
 import h5py
 from pathlib import Path
-from yumi_ros_noetic.base import YuMiBaseInterface
+from yumi_realtime.base import YuMiBaseInterface
 import time 
 import plotly.express as px
 

@@ -1,4 +1,4 @@
-from yumi_ros_noetic.base import YuMiBaseInterface, TransformHandle
+from yumi_realtime.base import YuMiBaseInterface, TransformHandle
 from loguru import logger
 import viser
 import jax.numpy as jnp

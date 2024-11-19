@@ -1,4 +1,4 @@
-from yumi_ros_noetic.controller import YuMiROSInterface
+from yumi_realtime.controller import YuMiROSInterface
 from loguru import logger
 import numpy as onp
 import tyro
@@ -6,7 +6,7 @@ from typing import Literal
 
 import rospy
 from vr_policy.msg import VRPolicyAction
-from yumi_ros_noetic.oculus_control.utils.vr_control import VRPolicy
+from yumi_realtime.oculus_control.utils.vr_control import VRPolicy
 
 class YuMiOculusInterface(YuMiROSInterface):
     """YuMi interface with Oculus VR control."""
