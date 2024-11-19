@@ -1,6 +1,6 @@
-# YuMi ROS Noetic Interface
+# YuMi Realtime Control Interfaces
 
-A collection of realtime control interfaces for the bi-manual ABB YuMi IRB14000 robot arm using Robot Web Services (RWS) and Externally Guided Motion (EGM) low-level control and a ROS Noetic wrapper.
+A collection of realtime control interfaces for the bi-manual ABB YuMi IRB14000 robot arm using Robot Web Services (RWS) and Externally Guided Motion (EGM) low-level control.
 
 Available control interfaces include:
 1. Interactive Viser Interface (Draggable End-Effector Frames)
