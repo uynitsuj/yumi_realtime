@@ -2,7 +2,7 @@
 
 A collection of realtime control interfaces for the bi-manual ABB YuMi IRB14000 robot arm using Robot Web Services (RWS) and Externally Guided Motion (EGM) low-level control.
 
-Factor-graph-based inverse-kinematics optimization solver handled by [Chung-Min Kim's](https://github.com/chungmin99) [jaxmp](https://github.com/chungmin99/jaxmp) library! 
+Factor-graph-based inverse-kinematics optimization solver handled by the [jaxmp](https://github.com/chungmin99/jaxmp) library developed by [Chung-Min Kim](https://github.com/chungmin99)! 
 
 Available control interfaces include:
 1. Interactive Viser Interface (Draggable End-Effector Frames)
