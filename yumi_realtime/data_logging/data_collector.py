@@ -14,6 +14,7 @@ import jax.numpy as jnp
 import numpy as onp
 import jaxlie
 import shutil
+from vr_policy.msg import VRPolicyAction, OculusData
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(dir_path, "../../trajectories/data")
@@ -69,14 +70,21 @@ class DataCollector:
         
         self.current_image = None
         
-        self.max_buffer_length = 350
+        self.max_buffer_length = 80
         self.current_joint_buffer = []
-        # self.current_joint_buffer_egm = []
+        self.current_action_L_buffer = []
+        self.current_action_R_buffer = []
+
+        self.max_buffer_length_egm = 350
+        self.current_joint_buffer_egm = []
+
         # Initialize message filters for synchronization
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
         self.joint_sub = rospy.Subscriber('/yumi/combined/joint_states', JointState, self.joint_callback)
+        self.vr_policy_L_sub = rospy.Subscriber('/vr_policy/control_l', VRPolicyAction, self.vr_policy_L_callback)
+        self.vr_policy_R_sub = rospy.Subscriber('/vr_policy/control_r', VRPolicyAction, self.vr_policy_R_callback)
 
-        # self.joint_sub_egm = rospy.Subscriber('/yumi/egm/joint_states', JointState, self.joint_callback)
+        self.joint_sub_egm = rospy.Subscriber('/yumi/egm/joint_states', JointState, self.joint_callback_egm)
         
         # Set up ROS services for control
         rospy.Service('~start_recording', Empty, self.start_recording)
@@ -98,8 +106,29 @@ class DataCollector:
                                         self.current_joint_buffer,
                                         key=lambda joint_state: abs(joint_state.header.stamp.to_nsec()-target_time)
                                     )
-            bgr_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
-            joint_positions = closest_joint_state.position
+            
+            closest_joint_state_egm = min( #retrieve from current_joint_buffer_egm the joint state closest in time to the image timestamp
+                                        self.current_joint_buffer_egm,
+                                        key=lambda joint_state: abs(joint_state.header.stamp.to_nsec()-target_time)
+                                    )
+            
+            closest_action_L = min( #retrieve from current_action_L_buffer the joint state closest in time to the image timestamp
+                                        self.current_action_L_buffer,
+                                        key=lambda action: abs(action.header.stamp.to_nsec()-target_time)
+                                    )
+            
+            closest_action_R = min( #retrieve from current_action_L_buffer the joint state closest in time to the image timestamp
+                                        self.current_action_R_buffer,
+                                        key=lambda action: abs(action.header.stamp.to_nsec()-target_time)
+                                    )
+
+            
+            rgb_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8')
+            joint_positions = list(closest_joint_state.position)
+
+            if abs(closest_joint_state_egm.header.stamp.to_nsec() - target_time) < abs(closest_joint_state.header.stamp.to_nsec() - target_time):
+                joint_positions[0:14] = closest_joint_state_egm.position
+
             joint_velocities = closest_joint_state.velocity
             
             if len(joint_velocities) == 0:
@@ -112,12 +141,12 @@ class DataCollector:
             
             # Observation
             self.image_dataset.resize(self.count + 1, axis=0)
-            self.image_dataset[self.count] = bgr_image
+            self.image_dataset[self.count] = rgb_image
             
             self.image_ts_dataset.resize(self.count + 1, axis=0)
             self.image_ts_dataset[self.count] = target_time
             
-            # Joint action
+            # Joint state
             self.joint_angle_dataset.resize(self.count + 1, axis=0)
             self.joint_angle_dataset[self.count] = joint_positions
             
@@ -128,7 +157,7 @@ class DataCollector:
             timestamp = closest_joint_state.header.stamp
             self.joint_ts_dataset[self.count] = timestamp.to_nsec()
             
-            # Cartesian action
+            # Cartesian state
             joints_array = jnp.array(joint_positions, dtype=jnp.float32)
             fk_frames = self.kin.forward_kinematics(joints_array)
             
@@ -144,9 +173,34 @@ class DataCollector:
                     
             assert not all(cartesian_pose == 0)
             
-            self.cartesian_pos_dataset.resize(self.count + 1, axis=0)
-            self.cartesian_pos_dataset[self.count] = cartesian_pose
-                        
+            self.cartesian_pose_dataset.resize(self.count + 1, axis=0)
+            self.cartesian_pose_dataset[self.count] = cartesian_pose
+            
+            # Action
+            cartesian_pose_action = onp.array(
+                [
+                    closest_action_L.transform.rotation.w,
+                    closest_action_L.transform.rotation.x,
+                    closest_action_L.transform.rotation.y,
+                    closest_action_L.transform.rotation.z,
+                    closest_action_L.transform.translation.x,
+                    closest_action_L.transform.translation.y,
+                    closest_action_L.transform.translation.z,
+                    
+                    closest_action_R.transform.rotation.w,
+                    closest_action_R.transform.rotation.x,
+                    closest_action_R.transform.rotation.y,
+                    closest_action_R.transform.rotation.z,
+                    closest_action_R.transform.translation.x,
+                    closest_action_R.transform.translation.y,
+                    closest_action_R.transform.translation.z,
+                ]
+            )
+                      
+
+            self.action_dataset.resize(self.count + 1, axis=0)
+            self.action_dataset[self.count] = cartesian_pose_action
+
             # Flush data to disk periodically
             self.count += 1
             if self.count % 100 == 0:
@@ -157,6 +211,22 @@ class DataCollector:
         self.current_joint_buffer.append(joint_msg)
         if(len(self.current_joint_buffer)>self.max_buffer_length):
             self.current_joint_buffer.pop(0)
+
+    def joint_callback_egm(self, joint_msg):
+        self.current_joint_buffer_egm.append(joint_msg)
+        if(len(self.current_joint_buffer_egm)>self.max_buffer_length_egm):
+            self.current_joint_buffer_egm.pop(0)
+
+
+    def vr_policy_L_callback(self, msg):
+        self.current_action_L_buffer.append(msg.target_cartesian_pos)
+        if(len(self.current_action_L_buffer)>self.max_buffer_length):
+            self.current_action_L_buffer.pop(0)
+
+    def vr_policy_R_callback(self, msg):
+        self.current_action_R_buffer.append(msg.target_cartesian_pos)
+        if(len(self.current_action_R_buffer)>self.max_buffer_length):
+            self.current_action_R_buffer.pop(0)
     
     def create_new_file(self):
         """Creates a new HDF5 file with SWMR mode enabled"""
@@ -192,9 +262,19 @@ class DataCollector:
             dtype='int',
         )
         
-        self.joint_group = self.file.create_group('action/joint')
+        self.joint_group = self.file.create_group('state/joint')
         
-        self.cartesian_group = self.file.create_group('action/cartesian')
+        self.cartesian_group = self.file.create_group('state/cartesian')
+
+        self.action_group = self.file.create_group('action')
+        
+        self.action_dataset = self.action_group.create_dataset(
+            'cartesian_pose',
+            shape=(0, 14), # [LEFT ARM] w, x, y, z, -- x, y, z + [RIGHT ARM] w, x, y, z -- x, y, z
+            maxshape=(None, 14),
+            chunks=(1, 14),
+            dtype='float64',
+        )
         
         self.cartesian_pose_dataset = self.cartesian_group.create_dataset(
             'cartesian_pose',

@@ -42,7 +42,7 @@ def np_to_plotly(im):
     return fig
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/failure/2024/11/15/robot_trajectory_22_10_44.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/example_task1/robot_trajectory_2024_11_20_22_00_56.h5',
     ):
     
     h5_file_path = Path(h5_file_path)
@@ -61,18 +61,20 @@ def main(
         prev_button = yumi.server.gui.add_button(label = "Back", icon=viser.Icon.ARROW_BIG_LEFT_FILLED)
     
     slider_handle = yumi.server.gui.add_slider(
-        "Data Entry Index", min=0, max=f['action/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
+        "Data Entry Index", min=0, max=f['state/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
     )
     im = f['observation/camera/image/camera_rgb'][:]
     fig = np_to_plotly(im[0])
     
     fig_handle = yumi.server.gui.add_plotly(figure=fig, aspect=im[0].shape[0]/im[0].shape[1])
-    names = f['action/joint/joint_name'][:].tolist()[0]
+    names = f['state/joint/joint_name'][:].tolist()[0]
         
-    angles = f['action/joint/joint_angle_rad'][:]
+    angles = f['state/joint/joint_angle_rad'][:]
     config = names_angles_to_dict(names, angles, 0)
     
-    cartesian = f['action/cartesian/cartesian_pos'][:]
+    cartesian = f['state/cartesian/cartesian_pose'][:]
+
+    cartesian_action = f['action/cartesian_pose'][:]
     
     yumi.urdf_vis.update_cfg(config)
     
@@ -84,6 +86,19 @@ def main(
                 )
     tf_right_frame = yumi.server.scene.add_frame(
                     "tf_right",
+                    axes_length=0.5 * 0.2,
+                    axes_radius=0.01 * 0.2,
+                    origin_radius=0.1 * 0.2,
+                )
+    
+    tf_left_action_frame = yumi.server.scene.add_frame(
+                    "tf_left_action",
+                    axes_length=0.5 * 0.2,
+                    axes_radius=0.01 * 0.2,
+                    origin_radius=0.1 * 0.2,
+                )
+    tf_right_action_frame = yumi.server.scene.add_frame(
+                    "tf_right_action",
                     axes_length=0.5 * 0.2,
                     axes_radius=0.01 * 0.2,
                     origin_radius=0.1 * 0.2,
@@ -110,7 +125,12 @@ def main(
         tf_left_frame.wxyz = cartesian[slider_handle.value, 0:4]
         tf_right_frame.position = cartesian[slider_handle.value, 11:14]
         tf_right_frame.wxyz = cartesian[slider_handle.value, 7:11]
-        
+
+        tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
+        tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
+        tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
+        tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
+
         yumi.urdf_vis.update_cfg(config)
         
         fig = np_to_plotly(im[slider_handle.value])
@@ -135,7 +155,7 @@ def main(
         
     while True:
         if play:
-            slider_handle.value = (slider_handle.value + 1) % f['action/joint/joint_angle_rad'].shape[0]
+            slider_handle.value = (slider_handle.value + 1) % f['state/joint/joint_angle_rad'].shape[0]
             
         time.sleep(1/30)
 

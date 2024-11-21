@@ -94,7 +94,8 @@ class YuMiROSInterface(YuMiBaseInterface):
             self.prev_gripper_L = 0
             self.prev_gripper_R = 0
             self.egm_active = False
-            
+            self._homing = False
+
             # Start EGM
             self.start_egm_control()
             
@@ -364,6 +365,10 @@ class YuMiROSInterface(YuMiBaseInterface):
             # Need to flip arm order for actual robot control
             if self._first_js_callback:
                 continue
+
+            if self._homing:
+                self.home()
+
             joint_desired = onp.array([
                 self.joints[7], self.joints[8], self.joints[9],    # Left arm first
                 self.joints[10], self.joints[11], self.joints[12], self.joints[13],

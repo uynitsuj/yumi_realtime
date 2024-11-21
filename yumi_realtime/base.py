@@ -308,6 +308,9 @@ class YuMiBaseInterface:
             for idx in target_indices
         ) / len(target_indices)
         self.manipulability_cost_handle.value = onp.array(manip_cost).item()
+    
+    def home(self):
+        self.joints = self.rest_pose
         
     def run(self):
         """Main run loop."""

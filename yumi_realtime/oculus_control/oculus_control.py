@@ -84,20 +84,23 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
-        # if not self._saving_data:
-        #     self.handle_data(data)
-
     def handle_data(self, data):
         if self.collect_data:
             if data.traj_success and not self._saving_data:
                 if not self.begin_record:
                     self.begin_record = True
+                    self._homing = True
+                    rospy.sleep(1.5)
+                    self._homing = False
                     self.start_record()
-                    rospy.sleep(1.0)
+                    rospy.sleep(0.5)
                     return None
+                
                 self._saving_data = True
                 self.save_success()
-                rospy.sleep(0.5)
+                self._homing = True
+                rospy.sleep(1.5)
+                self._homing = False
                 self.start_record()
                 rospy.sleep(0.5)
                 self._saving_data = False
@@ -105,12 +108,18 @@ class YuMiOculusInterface(YuMiROSInterface):
             if data.traj_failure and not self._saving_data:
                 if not self.begin_record:
                     self.begin_record = True
+                    self._homing = True
+                    rospy.sleep(1.5)
+                    self._homing = False
                     self.start_record()
-                    rospy.sleep(1.0)
+                    rospy.sleep(0.5)
                     return None
+                
                 self._saving_data = True
                 self.save_failure()
-                rospy.sleep(0.5)
+                self._homing = True
+                rospy.sleep(1.5)
+                self._homing = False
                 self.start_record()
                 rospy.sleep(0.5)
                 self._saving_data = False
