@@ -15,7 +15,8 @@
 	url = https://github.com/uynitsuj/abb_robot_driver.git
 [submodule "dependencies/jaxls"]
 	path = dependencies/jaxls
-	url = https://github.com/chungmin99/jaxls/commits/py310/
+	url = https://github.com/chungmin99/jaxls.git
+	branch = 2d1035c
 [submodule "dependencies/jaxmp"]
 	path = dependencies/jaxmp
 	url = https://github.com/uynitsuj/jaxmp
