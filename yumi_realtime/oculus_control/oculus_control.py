@@ -33,13 +33,7 @@ class YuMiOculusInterface(YuMiROSInterface):
         
         self.collect_data = collect_data
         self.begin_record = False
-        
-        if self.collect_data:
-            self._saving_data = False
-            
-            self.start_record = rospy.ServiceProxy("/data_collector/start_recording", Empty)()
-            self.save_success = rospy.ServiceProxy("/data_collector/save_success", Empty)()
-            self.save_failure = rospy.ServiceProxy("/data_collector/save_failure", Empty)()
+        self._saving_data = False
                     
         logger.info("VR control interface initialized")
         
@@ -65,7 +59,8 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
-        self.handle_data(data)
+        if not self._saving_data:
+            self.handle_data(data)
         
     def _control_r_callback(self, data):
         """Handle right controller updates."""
@@ -89,23 +84,42 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
-        self.handle_data(data)
+        # if not self._saving_data:
+        #     self.handle_data(data)
 
     def handle_data(self, data):
         if self.collect_data:
             if data.traj_success and not self._saving_data:
                 if not self.begin_record:
+                    self.begin_record = True
                     self.start_record()
+                    rospy.sleep(1.0)
                     return None
                 self._saving_data = True
                 self.save_success()
+                rospy.sleep(0.5)
+                self.start_record()
+                rospy.sleep(0.5)
+                self._saving_data = False
                 
             if data.traj_failure and not self._saving_data:
                 if not self.begin_record:
+                    self.begin_record = True
                     self.start_record()
+                    rospy.sleep(1.0)
                     return None
                 self._saving_data = True
                 self.save_failure()
+                rospy.sleep(0.5)
+                self.start_record()
+                rospy.sleep(0.5)
+                self._saving_data = False
+    
+    def _setup_collectors(self):
+        if self.collect_data:
+            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
+            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
+            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
 
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
@@ -124,7 +138,7 @@ def main(
     if collect_data:
         logger.info("Start data collection service")
         data_collector = DataCollector(init_node=False)
-        
+        yumi_interface._setup_collectors()
     yumi_interface.run()
     
     

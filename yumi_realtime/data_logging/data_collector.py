@@ -71,9 +71,12 @@ class DataCollector:
         
         self.max_buffer_length = 350
         self.current_joint_buffer = []
+        # self.current_joint_buffer_egm = []
         # Initialize message filters for synchronization
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
         self.joint_sub = rospy.Subscriber('/yumi/combined/joint_states', JointState, self.joint_callback)
+
+        # self.joint_sub_egm = rospy.Subscriber('/yumi/egm/joint_states', JointState, self.joint_callback)
         
         # Set up ROS services for control
         rospy.Service('~start_recording', Empty, self.start_recording)
@@ -157,8 +160,10 @@ class DataCollector:
     
     def create_new_file(self):
         """Creates a new HDF5 file with SWMR mode enabled"""
-        timestamp = datetime.now().strftime('%Y/%m/%d %H_%M_%S')
+        timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
         filename = os.path.join(self.failure_logdir, f'robot_trajectory_{timestamp}.h5')
+
+        self.filename_suffix = f'robot_trajectory_{timestamp}.h5'
         
         # Create file with SWMR mode enabled
         self.filepath = filename
@@ -267,7 +272,7 @@ class DataCollector:
                     self._first_line = True
                 
                 self.is_recording = False
-                rospy.loginfo("Stopped recording")
+                rospy.loginfo("FAILED TRAJECTORY saved to {self.success_logdir}")
         return EmptyResponse()
     
     def save_success(self, req):
@@ -287,7 +292,8 @@ class DataCollector:
                     self._first_line = True
                 
                 self.is_recording = False
-                rospy.loginfo("Stopped recording")
+                os.path.join(self.success_logdir, self.filename_suffix)
+                rospy.loginfo("SUCCESSFUL TRAJECTORY saved to {self.success_logdir}")
         shutil.move(self.filepath, self.success_logdir)
         
         return EmptyResponse()

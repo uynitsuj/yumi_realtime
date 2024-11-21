@@ -28,7 +28,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         self._js_update_lock = threading.Lock()
         
         try:
-            rospy.init_node('yumi_controller', anonymous=True)
+            rospy.init_node('yumi_controller')
             
             visible_topics = rospy.get_published_topics()
             
