@@ -45,10 +45,10 @@ Open 2 additional terminals for 1. Oculus input reader node 2. Viser live UI and
 
 1. Oculus device reader node
 ```bash
-python ~/yumi_realtime/yumi_realtime/oculus_control/utils/oculus_node.py
+python ~/yumi_realtime/yumi_realtime/oculus_controller/utils/oculus_node.py
 ```
 
 2. Viser live UI and robot controller interface
 ```bash
-python ~/yumi_realtime/yumi_realtime/oculus_control/oculus_control.py
+python ~/yumi_realtime/yumi_realtime/oculus_controller/oculus_control.py
 ```
