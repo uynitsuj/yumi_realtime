@@ -163,19 +163,25 @@ class VRPolicy:
         # Publish the generated action
         policy_action = VRPolicyAction()
         policy_action.target_cartesian_pos = action7d2tf(action["target_pose"])
-        policy_action.target_gripper_pos = action["target_gripper_pos"]
+        # import pdb; pdb.set_trace()
+        # policy_action.target_gripper_pos = action["target_gripper_pos"]
+        policy_action.target_gripper_pos = self._state["buttons"][self.controller_id.upper() + "Tr"]
+        
         policy_action.target_cartesian_vel = action7d2tf(action["target_vel"])
         policy_action.target_gripper_vel = action["target_gripper_vel"]
         policy_action.enable = self._state["movement_enabled"]
+        
+        policy_action.traj_success = self._state["buttons"]["A"]
+        policy_action.traj_failure = self._state["buttons"]["B"]
+        
         self._publish_action(policy_action)
-
 
     def _robot_data_callback(self, data):
         """
         Callback function to handle incoming data from the robot pose subscriber.
         """
         # Update the internal state with the received data
-        with self._state_lock: 
+        with self._state_lock:
             self._state["robot_pose"] = quaternion_matrix([data.transform.rotation.x,
                                                             data.transform.rotation.y,
                                                             data.transform.rotation.z,
@@ -263,10 +269,11 @@ class VRPolicy:
 
     def _calculate_action(self):
         # Read Sensor #
+        
         if self.update_sensor:
             self._process_reading()
             self.update_sensor = False
-
+        
         # Read Observation
         with self._state_lock: 
             if self._state["robot_pose"] is None:

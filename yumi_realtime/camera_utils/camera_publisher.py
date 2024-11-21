@@ -11,6 +11,7 @@ class CameraPublisher:
         name: str='camera_0',
         image_height: int=480,
         image_width: int=848,
+        fps: int=30,
         init_node: bool=False
         ):
         
@@ -30,7 +31,7 @@ class CameraPublisher:
         
         self.height = image_height 
         self.width = image_width 
-        self.fps = 30
+        self.fps = fps
 
         self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0) # turn the autofocus off
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))

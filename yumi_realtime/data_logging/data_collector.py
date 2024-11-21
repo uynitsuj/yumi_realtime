@@ -13,6 +13,7 @@ from jaxmp.extras.urdf_loader import load_urdf
 import jax.numpy as jnp
 import numpy as onp
 import jaxlie
+import shutil
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 data_dir = os.path.join(dir_path, "../../trajectories/data")
@@ -24,7 +25,8 @@ class DataCollector:
         save_data: bool = True,
         save_traj_dir: str = None,
         image_height: int = 480, 
-        image_width: int = 848
+        image_width: int = 848,
+        task_name: str = 'example_task1'
         ):
         
         if init_node:
@@ -38,8 +40,8 @@ class DataCollector:
         # Create log directories if they don't exist
         if save_traj_dir is None:
             save_traj_dir = data_dir
-        self.success_logdir = os.path.join(save_traj_dir, "success", str(datetime.now().strftime("%Y/%m/%d")))
-        self.failure_logdir = os.path.join(save_traj_dir, "failure", str(datetime.now().strftime("%Y/%m/%d")))
+        self.success_logdir = os.path.join(save_traj_dir, "success", task_name)
+        self.failure_logdir = os.path.join(save_traj_dir, "failure", task_name)
         if not os.path.isdir(self.success_logdir):
             os.makedirs(self.success_logdir)
         if not os.path.isdir(self.failure_logdir):
@@ -75,7 +77,8 @@ class DataCollector:
         
         # Set up ROS services for control
         rospy.Service('~start_recording', Empty, self.start_recording)
-        rospy.Service('~stop_recording', Empty, self.stop_recording)
+        rospy.Service('~save_failure', Empty, self.save_failure)
+        rospy.Service('~save_success', Empty, self.save_success)
         
         self.count = 0
         rospy.loginfo("Data logger initialized and ready to record")
@@ -154,10 +157,11 @@ class DataCollector:
     
     def create_new_file(self):
         """Creates a new HDF5 file with SWMR mode enabled"""
-        timestamp = datetime.now().strftime('%H_%M_%S')
+        timestamp = datetime.now().strftime('%Y/%m/%d %H_%M_%S')
         filename = os.path.join(self.failure_logdir, f'robot_trajectory_{timestamp}.h5')
         
         # Create file with SWMR mode enabled
+        self.filepath = filename
         self.file = h5py.File(filename, 'w', libver='latest')
         self.file.swmr_mode = True
         
@@ -246,7 +250,7 @@ class DataCollector:
                 rospy.loginfo(f"Started recording to: {filename}")
         return EmptyResponse()
 
-    def stop_recording(self, req):
+    def save_failure(self, req):
         """ROS service handler to stop recording"""
         with self.file_lock:
             if self.is_recording:
@@ -264,6 +268,28 @@ class DataCollector:
                 
                 self.is_recording = False
                 rospy.loginfo("Stopped recording")
+        return EmptyResponse()
+    
+    def save_success(self, req):
+        """ROS service handler to stop recording"""
+        with self.file_lock:
+            if self.is_recording:
+                if self.file is not None:
+                    # Add end time metadata
+                    end_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    self.file['metadata'].create_dataset('end_time', data=end_time.encode('utf-8'))
+                    self.file['metadata'].create_dataset('total_frames', data=self.count)
+                    
+                    self.file.close()
+                    self.file = None
+                    self.image_dataset = None
+                    self.joint_dataset = None
+                    self._first_line = True
+                
+                self.is_recording = False
+                rospy.loginfo("Stopped recording")
+        shutil.move(self.filepath, self.success_logdir)
+        
         return EmptyResponse()
 
     def __del__(self):

@@ -42,7 +42,7 @@ def np_to_plotly(im):
     return fig
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_ros_noetic/trajectories/data/failure/2024/11/15/robot_trajectory_22_10_44.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/failure/2024/11/15/robot_trajectory_22_10_44.h5',
     ):
     
     h5_file_path = Path(h5_file_path)
@@ -52,10 +52,13 @@ def main(
     yumi = YuMiBaseInterface(minimal=True)
     
     f = h5py.File(h5_file_path, 'r')
+    play=False
     
     with yumi.server.gui.add_folder("Controls"):
-        next_button = yumi.server.gui.add_button("Next")
-        prev_button = yumi.server.gui.add_button("Previous")
+        play_button = yumi.server.gui.add_button(label = "Play", icon=viser.Icon.PLAYER_PLAY_FILLED)
+        pause_button = yumi.server.gui.add_button(label = "Pause", icon=viser.Icon.PLAYER_PAUSE_FILLED, visible=False)
+        next_button = yumi.server.gui.add_button(label = "Forward", icon=viser.Icon.ARROW_BIG_RIGHT_FILLED)
+        prev_button = yumi.server.gui.add_button(label = "Back", icon=viser.Icon.ARROW_BIG_LEFT_FILLED)
     
     slider_handle = yumi.server.gui.add_slider(
         "Data Entry Index", min=0, max=f['action/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
@@ -115,9 +118,26 @@ def main(
         
         # print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
         # print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)
+    @play_button.on_click
+    def _(_) -> None:
+        nonlocal play 
+        play = True
+        play_button.visible = False
+        pause_button.visible = True
+    
+    @pause_button.on_click
+    def _(_) -> None:
+        nonlocal play
+        play = False
+        play_button.visible = True
+        pause_button.visible = False
+        
         
     while True:
-        time.sleep(0.1)
+        if play:
+            slider_handle.value = (slider_handle.value + 1) % f['action/joint/joint_angle_rad'].shape[0]
+            
+        time.sleep(1/30)
 
 if __name__ == "__main__":
     tyro.cli(main)
