@@ -51,7 +51,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             input = {
             "observation": self.observation_history,
-            "proprio": self.action
+            "proprio": self.state
                 }
         
             action_prediction = self.model.forward(input) # Denoise action prediction from obs and proprio...
