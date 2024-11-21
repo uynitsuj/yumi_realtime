@@ -15,7 +15,7 @@ import geometry_msgs.msg
 import std_msgs.msg
 from vr_policy.msg import VRPolicyAction, OculusData
 from scipy.spatial.transform import Rotation as R
-from yumi_realtime.oculus_control.utils.transformations import quat_to_euler, euler_to_quat, rmat_to_quat, quat_diff, add_angles, vec_to_reorder_mat, add_quats
+from yumi_realtime.oculus_controller.utils.transformations import quat_to_euler, euler_to_quat, rmat_to_quat, quat_diff, add_angles, vec_to_reorder_mat, add_quats
 import tyro
 from typing import Literal
 from scipy.spatial.transform import Rotation as R

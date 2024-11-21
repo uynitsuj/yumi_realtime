@@ -24,3 +24,6 @@
 	path = dependencies/oculus_reader
 	url = https://github.com/rail-berkeley/oculus_reader.git
 	branch = de73f3d
+[submodule "dependencies/dp_gs"]
+	path = dependencies/dp_gs
+	url = https://github.com/Max-Fu/dp_gs.git

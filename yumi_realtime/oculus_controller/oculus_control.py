@@ -6,7 +6,7 @@ from typing import Literal
 
 import rospy
 from vr_policy.msg import VRPolicyAction
-from yumi_realtime.oculus_control.utils.vr_control import VRPolicy
+from yumi_realtime.oculus_controller.utils.vr_control import VRPolicy
 from yumi_realtime.data_logging.data_collector import DataCollector
 from std_srvs.srv import Empty, EmptyResponse
 

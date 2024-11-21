@@ -262,8 +262,10 @@ class YuMiROSInterface(YuMiBaseInterface):
                     )
                     
                     if side == 'left':
+                        self.cartesian_pose_L = tf_msg
                         self.tf_left_pub.publish(tf_msg)
                     else:
+                        self.cartesian_pose_R = tf_msg
                         self.tf_right_pub.publish(tf_msg)
                     
                     if self._first_js_callback:
