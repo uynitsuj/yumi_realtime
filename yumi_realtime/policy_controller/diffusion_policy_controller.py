@@ -35,7 +35,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.observation_history = []
         
         self.bridge = CvBridge()
-                    
+        
         logger.info("Diffusion Policy controller initialized")
     
     def run(self):
@@ -44,6 +44,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
             rate.sleep() # Wait for first inputs to arrive
+        
+        assert type(self.observation_history) is torch.Tensor
         
         while not rospy.is_shutdown():
             
