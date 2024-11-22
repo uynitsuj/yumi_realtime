@@ -363,26 +363,27 @@ class YuMiROSInterface(YuMiBaseInterface):
             super().solve_ik()
             super().update_visualization()
             
-            # Publish joint commands
-            # Need to flip arm order for actual robot control
             if self._first_js_callback:
                 continue
 
             if self._homing:
                 self.home()
 
-            joint_desired = onp.array([
+            self.publish_joint_commands()
+                
+            rate.sleep()
+            
+    def publish_joint_commands(self):
+        """Publish joint commands to the robot."""
+        # Need to flip arm order for actual robot control
+        joint_desired = onp.array([
                 self.joints[7], self.joints[8], self.joints[9],    # Left arm first
                 self.joints[10], self.joints[11], self.joints[12], self.joints[13],
                 self.joints[0], self.joints[1], self.joints[2],    # Right arm second
                 self.joints[3], self.joints[4], self.joints[5], self.joints[6]
             ], dtype=onp.float32)
-            
-            # Publish joint commands
-            msg = Float64MultiArray(data=joint_desired[0:14])
-            self.joint_pub.publish(msg)
-                
-            rate.sleep()
+        msg = Float64MultiArray(data=joint_desired)
+        self.joint_pub.publish(msg)
 
 if __name__ == "__main__":
     yumi_interface = YuMiROSInterface()

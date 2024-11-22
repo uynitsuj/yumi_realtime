@@ -43,6 +43,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         rate = rospy.Rate(250) # 250Hz control loop          
         
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
+            self.home() # Move to home position as first action
+            rospy.sleep(5)
             rate.sleep() # Wait for first inputs to arrive
         
         assert type(self.observation_history) is torch.Tensor
@@ -56,7 +58,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
             action_prediction = self.model.forward(input) # Denoise action prediction from obs and proprio...
             
-            import pdb; pdb.set_trace() # TODO: Convert action_prediction to commands for YuMi
+            import pdb; pdb.set_trace() # TODO: Convert denoised action_prediction format to commands for YuMi
             
             super().solve_ik()
             super().update_visualization()
@@ -69,16 +71,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             if self._homing:
                 self.home()
 
-            joint_desired = onp.array([
-                self.joints[7], self.joints[8], self.joints[9],    # Left arm first
-                self.joints[10], self.joints[11], self.joints[12], self.joints[13],
-                self.joints[0], self.joints[1], self.joints[2],    # Right arm second
-                self.joints[3], self.joints[4], self.joints[5], self.joints[6]
-            ], dtype=onp.float32)
-            
-            # Publish joint position commands
-            msg = Float64MultiArray(data=joint_desired[0:14])
-            self.joint_pub.publish(msg)
+            self.publish_joint_commands()
                 
             rate.sleep()
         
