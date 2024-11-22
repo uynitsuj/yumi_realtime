@@ -15,7 +15,6 @@ from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import Float64MultiArray, Header, String, Float64
 from std_srvs.srv import Empty, EmptyResponse
 
-
 import torch
 
 class YuMiDiffusionPolicyController(YuMiROSInterface):
@@ -67,7 +66,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 
             rate.sleep()
         
-    def image_callback(self, image_msg):
+    def image_callback(self, image_msg: Image):
         """Handle camera observation updates."""
         if self.height is None and self.width is None:
             self.height = image_msg.height
@@ -132,11 +131,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         )
         
 def main(): 
-    
     yumi_interface = YuMiDiffusionPolicyController()
-    
     yumi_interface.run()
-    
     
 if __name__ == "__main__":
     tyro.cli(main)

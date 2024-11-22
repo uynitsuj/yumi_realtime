@@ -158,6 +158,7 @@ class YuMiROSInterface(YuMiBaseInterface):
             logger.error(f"Failed to start EGM control: {e}")
     
     def _map_egm_joints(self, data: JointState):
+        """Remap EGM joint state order."""
         joints_real = {
                     "yumi_joint_1_r": data.position[7],
                     "yumi_joint_2_r": data.position[8],
@@ -188,6 +189,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         return joints_real
     
     def _map_rws_joints(self, data: JointState):
+        """Remap RWS joint state order."""
         joints_real = {
                     "yumi_joint_1_r": data.position[0],
                     "yumi_joint_2_r": data.position[1],

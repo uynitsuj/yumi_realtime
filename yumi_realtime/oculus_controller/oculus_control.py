@@ -37,7 +37,7 @@ class YuMiOculusInterface(YuMiROSInterface):
                     
         logger.info("VR control interface initialized")
         
-    def _control_l_callback(self, data):
+    def _control_l_callback(self, data: VRPolicyAction):
         """Handle left controller updates."""
         l_wxyz = onp.array([
             data.target_cartesian_pos.transform.rotation.w,
@@ -51,7 +51,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             data.target_cartesian_pos.transform.translation.z
         ])
         
-        self.update_target_pose(
+        super().update_target_pose(
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
@@ -62,7 +62,7 @@ class YuMiOculusInterface(YuMiROSInterface):
         if not self._saving_data:
             self.handle_data(data)
         
-    def _control_r_callback(self, data):
+    def _control_r_callback(self, data: VRPolicyAction):
         """Handle right controller updates."""
         r_wxyz = onp.array([
             data.target_cartesian_pos.transform.rotation.w,
@@ -76,7 +76,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             data.target_cartesian_pos.transform.translation.z
         ])
         
-        self.update_target_pose(
+        super().update_target_pose(
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
@@ -84,7 +84,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
-    def handle_data(self, data):
+    def handle_data(self, data: VRPolicyAction):
         if self.collect_data:
             if data.traj_success and not self._saving_data:
                 if not self.begin_record:
