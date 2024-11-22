@@ -20,7 +20,7 @@ import torch
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
     
-    def __init__(self, collect_data: bool = False, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
@@ -51,7 +51,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             input = {
             "observation": self.observation_history,
-            "proprio": self.state
+            "proprio": self.state # TODO: Update with proprioception data format from self.cartesian_pose_L and self.cartesian_pose_R
                 }
         
             action_prediction = self.model.forward(input) # Denoise action prediction from obs and proprio...
@@ -76,7 +76,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 self.joints[3], self.joints[4], self.joints[5], self.joints[6]
             ], dtype=onp.float32)
             
-            # Publish joint commands
+            # Publish joint position commands
             msg = Float64MultiArray(data=joint_desired[0:14])
             self.joint_pub.publish(msg)
                 
@@ -124,9 +124,6 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             enable=data.enable
         )
         
-        # if not self._saving_data:
-        #     self.handle_data(data)
-        
     def _control_r(self, data):
         """Handle right controller updates."""
         r_wxyz = onp.array([
@@ -149,62 +146,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             enable=data.enable
         )
         
-    def handle_data(self, data):
-        if self.collect_data:
-            if data.traj_success and not self._saving_data:
-                if not self.begin_record:
-                    self.begin_record = True
-                    self._homing = True
-                    rospy.sleep(1.5)
-                    self._homing = False
-                    self.start_record()
-                    rospy.sleep(0.5)
-                    return None
-                
-                self._saving_data = True
-                self.save_success()
-                self._homing = True
-                rospy.sleep(1.5)
-                self._homing = False
-                self.start_record()
-                rospy.sleep(0.5)
-                self._saving_data = False
-                
-            if data.traj_failure and not self._saving_data:
-                if not self.begin_record:
-                    self.begin_record = True
-                    self._homing = True
-                    rospy.sleep(1.5)
-                    self._homing = False
-                    self.start_record()
-                    rospy.sleep(0.5)
-                    return None
-                
-                self._saving_data = True
-                self.save_failure()
-                self._homing = True
-                rospy.sleep(1.5)
-                self._homing = False
-                self.start_record()
-                rospy.sleep(0.5)
-                self._saving_data = False
+def main(): 
     
-    def _setup_collectors(self):
-        if self.collect_data:
-            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
-            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
-            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
-
-def main(
-    collect_data : bool = False
-    ): 
+    yumi_interface = YuMiDiffusionPolicyController()
     
-    yumi_interface = YuMiDiffusionPolicyController(collect_data=collect_data)
-        
-    if collect_data:
-        logger.info("Start data collection service")
-        data_collector = DataCollector(init_node=False)
-        yumi_interface._setup_collectors()
     yumi_interface.run()
     
     
