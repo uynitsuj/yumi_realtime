@@ -59,12 +59,17 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
-            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0).unsqueeze(2) # [B, T, N_C, D]
+            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0).unsqueeze(2) # [B, T, 1, D]
                 }
         
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
+            # action_prediction [B, T, D]
             
-            action = convert_abs_action(action_prediction[None],self.cur_proprio[None,None])[0] # action_horizon, action_dim
+            action1 = convert_abs_action(action_prediction[0,:,:10],self.cur_proprio[:10][None,None])[0] # action_horizon, action_dim
+            action2 = convert_abs_action(action_prediction[0,:,10:],self.cur_proprio[10:][None,None])[0] # action_horizon, action_dim
+            
+            action = onp.concatenate([action1, action2], axis=-1)
+            
             # temporal emsemble start
             new_actions = deque(action[:self.model.model.action_horizon])
             self.action_queue.append(new_actions)
