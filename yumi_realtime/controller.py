@@ -174,8 +174,8 @@ class YuMiROSInterface(YuMiBaseInterface):
                     "yumi_joint_4_l": data.position[4],
                     "yumi_joint_5_l": data.position[5],
                     "yumi_joint_6_l": data.position[6],
-                    "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
-                    "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
+                    "gripper_r_joint": int(self.gripper_R_pos)/10000,
+                    "gripper_l_joint": int(self.gripper_L_pos)/10000,
                 }
         js_data_struct = JointState()
         js_data_struct.header = Header()
@@ -205,8 +205,8 @@ class YuMiROSInterface(YuMiBaseInterface):
                     "yumi_joint_4_l": data.position[11],
                     "yumi_joint_5_l": data.position[12],
                     "yumi_joint_6_l": data.position[13],
-                    "gripper_r_joint": int(self.gripper_R_pos.value)/10000,
-                    "gripper_l_joint": int(self.gripper_L_pos.value)/10000,
+                    "gripper_r_joint": int(self.gripper_R_pos)/10000,
+                    "gripper_l_joint": int(self.gripper_L_pos)/10000,
                 }
         
         return joints_real
@@ -217,8 +217,10 @@ class YuMiROSInterface(YuMiBaseInterface):
             with self._js_update_lock:
                 # Get gripper states
                 if len(data.velocity) == 0: # RWS joint states subscriber runs at ~5Hz
-                    self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
-                    self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
+                    gripper_msg_L = self.get_io("hand_ActualPosition_L") 
+                    gripper_msg_R = self.get_io("hand_ActualPosition_R")
+                    self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else 0
+                    self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else 0
                                     
                     # Update real robot joint configuration    
                     joints_real = self._map_rws_joints(data)
@@ -230,9 +232,12 @@ class YuMiROSInterface(YuMiBaseInterface):
                             self.egm_js_counter = 0
                             return 0
                     else:
-                        self.gripper_L_pos = self.get_io("hand_ActualPosition_L")
-                        self.gripper_R_pos = self.get_io("hand_ActualPosition_R")
+                        gripper_msg_L = self.get_io("hand_ActualPosition_L") 
+                        gripper_msg_R = self.get_io("hand_ActualPosition_R")
+                        self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else 0
+                        self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else 0
                         return 0
+                assert type(self.gripper_L_pos) == int and type(self.gripper_R_pos) == int
                 
                 # Update real robot visualization
                 self.urdf_vis_real.update_cfg(joints_real)
@@ -329,7 +334,9 @@ class YuMiROSInterface(YuMiBaseInterface):
                     target_handle.control.visible = False
                 target_handle.control.position = real_handle.position
                 target_handle.control.wxyz = real_handle.wxyz
-                
+        self.call_gripper(side, gripper_state, enable)
+        
+    def call_gripper(self, side: str, gripper_state: bool, enable: bool):       
         # Call gripper I/O services
         prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
         if enable:

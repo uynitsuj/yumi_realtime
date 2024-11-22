@@ -41,34 +41,47 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         self.cur_proprio = None
         
+        self.cartesian_pose_L = None
+        self.cartesian_pose_R = None
+        
         self.bridge = CvBridge()
         
         logger.info("Diffusion Policy controller initialized")
     
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(250) # 250Hz control loop          
+        rate = rospy.Rate(5) # 250Hz control loop          
         self.home()
+        i = 0
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
             self.home()
             rate.sleep()
             self.solve_ik()
             self.update_visualization()
+            
             super().publish_joint_commands()
+            if i % 750 == 0:
+                self.call_gripper(side = 'left', gripper_state = False, enable = True)
+                self.call_gripper(side = 'right', gripper_state = False, enable = True)
+                logger.info("Waiting for camera topic or robot pose data...")
+                i = 0
+            i += 1
 
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0).unsqueeze(2) # [B, T, 1, D]
                 }
-        
+                    
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             # action_prediction [B, T, D]
             
-            action1 = convert_abs_action(action_prediction[0,:,:10],self.cur_proprio[:10][None,None])[0] # action_horizon, action_dim
-            action2 = convert_abs_action(action_prediction[0,:,10:],self.cur_proprio[10:][None,None])[0] # action_horizon, action_dim
+            import pdb; pdb.set_trace()
             
-            action = onp.concatenate([action1, action2], axis=-1)
+            action_L = convert_abs_action(action_prediction[:,:,:10],self.cur_proprio[:10][None,None])[0]
+            action_R = convert_abs_action(action_prediction[:,:,10:],self.cur_proprio[10:][None,None])[0]
+            
+            action = onp.concatenate([action_L, action_R], axis=-1)
             
             # temporal emsemble start
             new_actions = deque(action[:self.model.model.action_horizon])
@@ -93,7 +106,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=l_gripper_cmd < 0.8, # Binary
+            gripper_state=l_gripper_cmd < 0.015, # Binary
             enable=True
             )
             
@@ -101,7 +114,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=r_gripper_cmd < 0.8, # Binary
+            gripper_state=r_gripper_cmd < 0.015, # Binary
             enable=True
             )
             ######################################################################
@@ -118,12 +131,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         l_q = Rotation.from_quat(l_xyzw)
         l_rot = l_q.as_matrix()
-        l_rot_6d = rot_mat_to_rot_6d(l_rot) # [N, 6]
+        l_rot_6d = onp.squeeze(rot_mat_to_rot_6d(l_rot[None]), axis=0)# [N, 6]
         r_q = Rotation.from_quat(r_xyzw)
         r_rot = r_q.as_matrix()
-        r_rot_6d = rot_mat_to_rot_6d(r_rot) # [N, 6]
+        r_rot_6d = onp.squeeze(rot_mat_to_rot_6d(r_rot[None]), axis=0) # [N, 6]
         
-        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, int(self.gripper_L_pos.value)/10000, r_xyz, r_rot_6d, int(self.gripper_R_pos.value)/10000], axis=-1)
+        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([int(self.gripper_L_pos)/10000]), r_xyz, r_rot_6d, onp.array([int(self.gripper_R_pos)/10000])], axis=-1, dtype=onp.float32)
+        assert self.cur_proprio.shape == (20,)
+
         self.proprio_buffer.append(self.cur_proprio)
     
     def image_callback(self, image_msg: Image):
@@ -137,10 +152,13 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         new_obs = onp.transpose(onp_img, (2, 0, 1)) # C, H, W
         
+        if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
+            return
+        
         while len(self.image_primary) < self.model.model.obs_horizon:
             self.image_primary.append(new_obs)
             self.update_curr_proprio()
-            
+
         assert len(self.image_primary) == self.model.model.obs_horizon
         assert len(self.proprio_buffer) == self.model.model.obs_horizon
               
@@ -157,7 +175,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
 def main(
     ckpt_path: str = "/home/xi/checkpoints/241121_1818",
-    ckpt_id: int = 80
+    ckpt_id: int = 99
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)

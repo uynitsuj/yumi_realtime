@@ -1,7 +1,7 @@
 from loguru import logger
 import numpy as onp
 from typing import Tuple
-from geometry_msgs.msg import Transform
+from geometry_msgs.msg import Transform, TransformStamped
 from scipy.spatial.transform import Rotation
 
 def gram_schmidt(vectors : onp.ndarray) -> onp.ndarray: 
@@ -95,7 +95,7 @@ def rot_6d_to_quat(rot_6d : onp.ndarray) -> onp.ndarray:
     rot_6d: N, 6
     """
     rot_mat = rot_6d_to_rot_mat(rot_6d)
-    return Rotation.from_matrix(rot_mat).as_quat()
+    return Rotation.from_matrix(rot_mat).as_quat(scalar_first=True)
 
 def action_10d_to_8d(action : onp.ndarray) -> onp.ndarray:
     """
@@ -105,7 +105,8 @@ def action_10d_to_8d(action : onp.ndarray) -> onp.ndarray:
     """
     return onp.concatenate([action[:3], rot_6d_to_quat(action[3:-1]).squeeze(), action[-1:]], axis=-1)
 
-def tf2xyz_quat(tf: Transform) -> Tuple[onp.ndarray, onp.ndarray]:
+def tf2xyz_quat(tfstamped: TransformStamped) -> Tuple[onp.ndarray, onp.ndarray]:
     """Convert ROS Transform message to XYZ and Quaternion XYZW."""
+    tf = tfstamped.transform
     return onp.array([tf.translation.x, tf.translation.y, tf.translation.z]), onp.array([tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w])
         
