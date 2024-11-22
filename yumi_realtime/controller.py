@@ -370,7 +370,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                 self.home()
 
             self.publish_joint_commands()
-                
+    
             rate.sleep()
             
     def publish_joint_commands(self):

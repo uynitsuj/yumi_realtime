@@ -7,6 +7,7 @@ from typing import Literal
 import rospy
 
 from yumi_realtime.data_logging.data_collector import DataCollector
+from yumi_realtime.base import YuMiBaseInterface
 from dp_gs.policy.model import DiffusionPolicy
 from dp_gs.policy.diffusion_wrapper import DiffusionPolicyWrapper, normalize, unnormalize
 from cv_bridge import CvBridge
@@ -60,18 +61,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             import pdb; pdb.set_trace() # TODO: Convert denoised action_prediction format to commands for YuMi
             
-            super().solve_ik()
-            super().update_visualization()
-            
-            # Publish joint commands
-            # Need to flip arm order for actual robot control
-            if self._first_js_callback:
-                continue
-
-            if self._homing:
-                self.home()
-
-            self.publish_joint_commands()
+            YuMiBaseInterface.solve_ik()
+            YuMiBaseInterface.update_visualization()
+            super().publish_joint_commands()
                 
             rate.sleep()
         
@@ -109,7 +101,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             data.target_cartesian_pos.transform.translation.z
         ])
         
-        self.update_target_pose(
+        super().update_target_pose(
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
@@ -131,7 +123,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             data.target_cartesian_pos.transform.translation.z
         ])
         
-        self.update_target_pose(
+        super().update_target_pose(
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
