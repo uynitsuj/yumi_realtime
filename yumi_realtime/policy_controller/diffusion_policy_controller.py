@@ -58,8 +58,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         while not rospy.is_shutdown():
             input = {
-            "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0), # [B, T, C, H, W]
-            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D]
+            "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
+            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0).unsqueeze(2) # [B, T, N_C, D]
                 }
         
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
@@ -130,7 +130,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # H, W, C
         
-        new_obs = onp_img.permute(2, 0, 1) # C, H, W
+        new_obs = onp.transpose(onp_img, (2, 0, 1)) # C, H, W
         
         while len(self.image_primary) < self.model.model.obs_horizon:
             self.image_primary.append(new_obs)
