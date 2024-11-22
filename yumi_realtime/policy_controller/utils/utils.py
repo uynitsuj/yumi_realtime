@@ -1,18 +1,7 @@
-from yumi_realtime.controller import YuMiROSInterface
 from loguru import logger
 import numpy as onp
-import tyro
 from typing import Tuple
-
-
-from yumi_realtime.data_logging.data_collector import DataCollector
-from yumi_realtime.base import YuMiBaseInterface
-from dp_gs.policy.diffusion_wrapper import DiffusioonpolicyWrapper, normalize, unnormalize
 from geometry_msgs.msg import Transform
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image, JointState
-from collections import deque
-import torch
 from scipy.spatial.transform import Rotation
 
 def gram_schmidt(vectors : onp.ndarray) -> onp.ndarray: 
@@ -91,6 +80,30 @@ def convert_abs_action(action,proprio):
         #with eos
         desired_mat = onp.concatenate([trans, rot, action[:,:,-2:]], axis=-1)
     return desired_mat
+
+def rot_6d_to_euler(rot_6d : onp.ndarray, format="XYZ"):
+    """
+    Convert 6d representation to euler angles
+    rot_6d: N, 6
+    """
+    rot_mat = rot_6d_to_rot_mat(rot_6d)
+    return Rotation.from_matrix(rot_mat).as_euler(format, degrees=False)
+
+def rot_6d_to_quat(rot_6d : onp.ndarray) -> onp.ndarray:
+    """
+    Convert 6d representation to quaternion
+    rot_6d: N, 6
+    """
+    rot_mat = rot_6d_to_rot_mat(rot_6d)
+    return Rotation.from_matrix(rot_mat).as_quat()
+
+def action_10d_to_8d(action : onp.ndarray) -> onp.ndarray:
+    """
+    Convert a 10d action to a 8d action
+    - 3d translation, 6d rotation, 1d gripper
+    to - 3d translation, 4d euler angles, 1d gripper
+    """
+    return onp.concatenate([action[:3], rot_6d_to_quat(action[3:-1]).squeeze(), action[-1:]], axis=-1)
 
 def tf2xyz_quat(tf: Transform) -> Tuple[onp.ndarray, onp.ndarray]:
     """Convert ROS Transform message to XYZ and Quaternion XYZW."""

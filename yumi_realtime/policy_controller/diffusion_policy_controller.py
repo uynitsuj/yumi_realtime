@@ -2,38 +2,43 @@ from yumi_realtime.controller import YuMiROSInterface
 from loguru import logger
 import numpy as onp
 import tyro
-from typing import Tuple
 import rospy
-from yumi_realtime.data_logging.data_collector import DataCollector
 from yumi_realtime.base import YuMiBaseInterface
 from yumi_realtime.policy_controller.utils.utils import *
-from dp_gs.policy.diffusion_wrapper import DiffusionPolicyWrapper, normalize, unnormalize
-from geometry_msgs.msg import Transform
+# from dp_gs.dataset.utils import *
+from dp_gs.policy.diffusion_wrapper import DiffusionWrapper
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Image, JointState
+from sensor_msgs.msg import Image
 from collections import deque
-import torch
 from scipy.spatial.transform import Rotation
+import PIL.Image as PILimage
+import torch
 
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
+        for side in ['left', 'right']:
+            target_handle = self.transform_handles[side]
+            target_handle.control.visible = False
+        
+        assert ckpt_path is not None, "Diffusion Policy checkpoint path must be provided."
+        
         # Setup Diffusion Policy module and weights
-        self.model = DiffusionPolicyWrapper()
+        self.model = DiffusionWrapper(model_ckpt_folder=ckpt_path, ckpt_id=ckpt_id, device='cuda')
         
         # ROS Camera Observation Subscriber
         self.height = None
         self.width = None
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
         
-        self.proprio_buffer = deque([],maxlen=self.model.obs_horizon)
-        self.image_primary, self.image_wrist = deque([],maxlen=self.model.obs_horizon), deque([],maxlen=self.model.obs_horizon)
-        self.action_queue = deque([],maxlen=self.model.action_horizon)
-        self.prev_action = deque([],maxlen=self.model.obs_horizon)
+        self.proprio_buffer = deque([],maxlen=self.model.model.obs_horizon)
+        self.image_primary, self.image_wrist = deque([],maxlen=self.model.model.obs_horizon), deque([],maxlen=self.model.model.obs_horizon)
+        self.action_queue = deque([],maxlen=self.model.model.action_horizon)
+        self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         self.cur_proprio = None
         
         self.bridge = CvBridge()
@@ -43,25 +48,27 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
     def run(self):
         """Diffusion Policy controller loop."""
         rate = rospy.Rate(250) # 250Hz control loop          
-        
+        self.home()
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
-            self.home() # Move to home position as first action
-            rospy.sleep(5)
-            rate.sleep() # Wait for first inputs to arrive
-        
+            self.home()
+            rate.sleep()
+            self.solve_ik()
+            self.update_visualization()
+            super().publish_joint_commands()
+
         while not rospy.is_shutdown():
             input = {
-            "observation": onp.array(self.image_primary),
-            "proprio": onp.array(self.proprio_buffer)
+            "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0), # [B, T, C, H, W]
+            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D]
                 }
         
-            action_prediction = self.model.forward(input) # Denoise action prediction from obs and proprio...
+            action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             
             action = convert_abs_action(action_prediction[None],self.cur_proprio[None,None])[0] # action_horizon, action_dim
             # temporal emsemble start
-            new_actions = deque(action[:self.model.action_horizon])
+            new_actions = deque(action[:self.model.model.action_horizon])
             self.action_queue.append(new_actions)
-            actions_current_timestep = onp.empty((len(self.action_queue), self.model.action_dim))
+            actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
             
             k = 0.05
             for i, q in enumerate(self.action_queue):
@@ -70,16 +77,18 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             exp_weights = exp_weights / exp_weights.sum()
             action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
             
-            # TODO: Convert denoised action_prediction format to commands for YuMi
+            # YuMi action update
             ######################################################################
-            l_xyz, l_wxyz = None, None
-            r_xyz, r_wxyz = None, None
+            l_act = action_10d_to_8d(action[:10])
+            r_act = action_10d_to_8d(action[10:])
+            l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1] 
+            r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
             
             super().update_target_pose(
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=False, # Binary
+            gripper_state=l_gripper_cmd < 0.8, # Binary
             enable=True
             )
             
@@ -87,13 +96,13 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=False, # Binary
+            gripper_state=r_gripper_cmd < 0.8, # Binary
             enable=True
             )
             ######################################################################
             
-            YuMiBaseInterface.solve_ik()
-            YuMiBaseInterface.update_visualization()
+            self.solve_ik()
+            self.update_visualization()
             super().publish_joint_commands()
             
             rate.sleep()
@@ -111,68 +120,26 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, int(self.gripper_L_pos.value)/10000, r_xyz, r_rot_6d, int(self.gripper_R_pos.value)/10000], axis=-1)
         self.proprio_buffer.append(self.cur_proprio)
-        
+    
     def image_callback(self, image_msg: Image):
         """Handle camera observation updates."""
         if self.height is None and self.width is None:
             self.height = image_msg.height
             self.width = image_msg.width
             logger.info(f"First image received; Observation dim: {self.height}x{self.width}x3")
+        
+        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # H, W, C
+        
+        new_obs = onp_img.permute(2, 0, 1) # C, H, W
+        
+        while len(self.image_primary) < self.model.model.obs_horizon:
+            self.image_primary.append(new_obs)
+            self.update_curr_proprio()
             
-        #todo: center crop image or padding    
-        image_msg  = image_msg.resize((224, 224), Image.Resampling.LANCZOS)
-        
-        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # Normalized to float [0, 1]
-        
-        new_obs = onp_img.permute(2, 0, 1)
-        self.image_primary.append(new_obs)
-        self.update_curr_proprio()
-
-    def _control_l(self, data):
-        """Handle left controller updates."""
-        l_wxyz = onp.array([
-            data.target_cartesian_pos.transform.rotation.w,
-            data.target_cartesian_pos.transform.rotation.x,
-            data.target_cartesian_pos.transform.rotation.y,
-            data.target_cartesian_pos.transform.rotation.z
-        ])
-        l_xyz = onp.array([
-            data.target_cartesian_pos.transform.translation.x,
-            data.target_cartesian_pos.transform.translation.y,
-            data.target_cartesian_pos.transform.translation.z
-        ])
-        
-        super().update_target_pose(
-            side='left',
-            position=l_xyz,
-            wxyz=l_wxyz,
-            gripper_state=data.target_gripper_pos,
-            enable=data.enable
-        )
-        
-    def _control_r(self, data):
-        """Handle right controller updates."""
-        r_wxyz = onp.array([
-            data.target_cartesian_pos.transform.rotation.w,
-            data.target_cartesian_pos.transform.rotation.x,
-            data.target_cartesian_pos.transform.rotation.y,
-            data.target_cartesian_pos.transform.rotation.z
-        ])
-        r_xyz = onp.array([
-            data.target_cartesian_pos.transform.translation.x,
-            data.target_cartesian_pos.transform.translation.y,
-            data.target_cartesian_pos.transform.translation.z
-        ])
-        
-        super().update_target_pose(
-            side='right',
-            position=r_xyz,
-            wxyz=r_wxyz,
-            gripper_state=data.target_gripper_pos,
-            enable=data.enable
-        )
-        
-    def start_episode(self):
+        assert len(self.image_primary) == self.model.model.obs_horizon
+        assert len(self.proprio_buffer) == self.model.model.obs_horizon
+              
+    def episode_start(self):
         """Reset the environment and start a new episode."""
         self.image_primary.clear()
         self.image_wrist.clear()
@@ -183,8 +150,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.home() # Move to home position as first action
         rospy.sleep(5)
         
-def main(): 
-    yumi_interface = YuMiDiffusionPolicyController()
+def main(
+    ckpt_path: str = "/home/xi/checkpoints/241121_1818",
+    ckpt_id: int = 80
+    ): 
+    
+    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
     yumi_interface.run()
     
 if __name__ == "__main__":
