@@ -84,6 +84,9 @@ class DataCollector:
         self.vr_policy_L_sub = rospy.Subscriber('/vr_policy/control_l', VRPolicyAction, self.vr_policy_L_callback)
         self.vr_policy_R_sub = rospy.Subscriber('/vr_policy/control_r', VRPolicyAction, self.vr_policy_R_callback)
 
+        self.enable_left = False 
+        self.enable_right = False
+
         self.joint_sub_egm = rospy.Subscriber('/yumi/egm/joint_states', JointState, self.joint_callback_egm)
         
         # Set up ROS services for control
@@ -100,6 +103,9 @@ class DataCollector:
         with self.file_lock:
             if self.file is None:
                 return
+            active = self.enable_left or self.enable_right
+            if not active:
+                return 
             timestamp = image_msg.header.stamp
             target_time = timestamp.to_nsec()
             closest_joint_state = min( #retrieve from current_joint_buffer the joint state closest in time to the image timestamp
@@ -127,7 +133,8 @@ class DataCollector:
             joint_positions = list(closest_joint_state.position)
 
             if abs(closest_joint_state_egm.header.stamp.to_nsec() - target_time) < abs(closest_joint_state.header.stamp.to_nsec() - target_time):
-                joint_positions[0:14] = closest_joint_state_egm.position
+                ja_dict = map_egm_joints(closest_joint_state_egm)
+                joint_positions[0:14] = list(ja_dict.values())
 
             joint_velocities = closest_joint_state.velocity
             
@@ -219,11 +226,13 @@ class DataCollector:
 
 
     def vr_policy_L_callback(self, msg):
+        self.enable_left = msg.enable
         self.current_action_L_buffer.append(msg.target_cartesian_pos)
         if(len(self.current_action_L_buffer)>self.max_buffer_length):
             self.current_action_L_buffer.pop(0)
 
     def vr_policy_R_callback(self, msg):
+        self.enable_right = msg.enable
         self.current_action_R_buffer.append(msg.target_cartesian_pos)
         if(len(self.current_action_R_buffer)>self.max_buffer_length):
             self.current_action_R_buffer.pop(0)
@@ -391,3 +400,24 @@ if __name__ == '__main__':
     finally:
         if 'logger' in locals():
             del logger
+            
+def map_egm_joints(data: JointState):
+        """Remap EGM joint state order."""
+        joints_real = {
+                    "yumi_joint_1_r": data.position[7],
+                    "yumi_joint_2_r": data.position[8],
+                    "yumi_joint_7_r": data.position[9],
+                    "yumi_joint_3_r": data.position[10],
+                    "yumi_joint_4_r": data.position[11],
+                    "yumi_joint_5_r": data.position[12],
+                    "yumi_joint_6_r": data.position[13],
+                    "yumi_joint_1_l": data.position[0],
+                    "yumi_joint_2_l": data.position[1],
+                    "yumi_joint_7_l": data.position[2],
+                    "yumi_joint_3_l": data.position[3],
+                    "yumi_joint_4_l": data.position[4],
+                    "yumi_joint_5_l": data.position[5],
+                    "yumi_joint_6_l": data.position[6],
+                }
+        
+        return joints_real

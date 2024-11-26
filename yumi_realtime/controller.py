@@ -289,7 +289,23 @@ class YuMiROSInterface(YuMiBaseInterface):
                         
         except Exception as e:
             logger.error(f"Error in joint state callback: {e}")
-            
+        
+    def home(self):
+        self.joints = self.rest_pose
+        # Update real robot transform frames
+        fk_frames = self.kin.forward_kinematics(self.joints.copy())
+        
+        for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+            joint_idx = self.kin.joint_names.index(joint_name)
+            T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
+            self.update_target_pose(
+                side=side,
+                position=onp.array(T_target_world.translation()),
+                wxyz=onp.array(T_target_world.rotation().wxyz),
+                gripper_state=False,
+                enable=False
+            )
+    
     def _egm_state_callback(self, data: EGMState):
         """Monitor EGM state and restart if necessary."""
         if data.egm_channels[0].active and data.egm_channels[1].active:

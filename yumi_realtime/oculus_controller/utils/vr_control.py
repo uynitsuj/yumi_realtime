@@ -215,6 +215,7 @@ class VRPolicy:
         self.robot_origin = None
         self.vr_origin = None
         self.vr_state = None
+        self.last_gripper_state = None
 
     def _update_internal_state(self, data):
         # Read Controller
@@ -282,6 +283,20 @@ class VRPolicy:
             robot_rmat = self._state["robot_pose"][:3, :3]
         robot_quat = rmat_to_quat(robot_rmat)
 
+        if not self._state["movement_enabled"]:
+            zero_vel = np.zeros(7)
+            zero_vel[-1] = 1 # xyzw, 0001
+            if self.last_gripper_state is None:
+                gripper_state = self.vr_state["gripper"]
+            else:
+                gripper_state = self.last_gripper_state
+            return {
+                "target_pose" : np.concatenate([robot_pos, robot_quat]),
+                "target_gripper_pos" : gripper_state,
+                "target_vel" : zero_vel,
+                "target_gripper_vel" : 0
+            }
+        
         # Reset Origin On Release #
         if self.reset_origin:
             self.robot_origin = {"pos": robot_pos, "quat": robot_quat}
@@ -307,6 +322,7 @@ class VRPolicy:
         target_quat = add_quats(quat_action, robot_quat)
         target_cartesian = np.concatenate([target_pos, target_quat])
         target_gripper = self.vr_state["gripper"]
+        self.last_gripper_state = target_gripper
 
         # Scale Appropriately #
         pos_action *= self.pos_action_gain

@@ -6,6 +6,7 @@ import numpy as np
 import h5py
 from pathlib import Path
 from yumi_realtime.base import YuMiBaseInterface
+from yumi_realtime.controller import YuMiROSInterface
 import time 
 import plotly.express as px
 
@@ -42,14 +43,14 @@ def np_to_plotly(im):
     return fig
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241123/robot_trajectory_2024_11_23_19_24_18.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger/robot_trajectory_2024_11_20_21_50_43.h5',
     ):
     
     h5_file_path = Path(h5_file_path)
     if not h5_file_path.exists():
         raise FileNotFoundError(f"{h5_file_path} does not exist.")
     
-    yumi = YuMiBaseInterface(minimal=True)
+    yumi = YuMiROSInterface()
     
     f = h5py.File(h5_file_path, 'r')
     play=False
@@ -75,8 +76,6 @@ def main(
     cartesian = f['state/cartesian/cartesian_pose'][:]
 
     cartesian_action = f['action/cartesian_pose'][:]
-    
-    # import pdb; pdb.set_trace()
     
     yumi.urdf_vis.update_cfg(config)
     
@@ -134,6 +133,23 @@ def main(
         tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
 
         yumi.urdf_vis.update_cfg(config)
+        
+        yumi.update_target_pose(
+            side = 'left',
+            position = cartesian_action[slider_handle.value, 4:7],
+            wxyz = cartesian_action[slider_handle.value, 0:4],
+            gripper_state = 0,
+            enable = True)
+        
+        yumi.update_target_pose(
+            side = 'right',
+            position = cartesian_action[slider_handle.value, 11:14],
+            wxyz = cartesian_action[slider_handle.value, 7:11],
+            gripper_state = 0,
+            enable = True)
+        
+        yumi.solve_ik()
+        yumi.publish_joint_commands()
         
         fig = np_to_plotly(im[slider_handle.value])
         fig_handle.figure = fig

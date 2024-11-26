@@ -3,6 +3,7 @@ from loguru import logger
 import numpy as onp
 import tyro
 from typing import Literal
+import jaxlie
 
 import rospy
 from vr_policy.msg import VRPolicyAction
@@ -34,6 +35,9 @@ class YuMiOculusInterface(YuMiROSInterface):
         self.collect_data = collect_data
         self.begin_record = False
         self._saving_data = False
+        self._homing = True
+        self.joint_noise = 0.05
+        self.noise_home_noise = None
                     
         logger.info("VR control interface initialized")
         
@@ -84,6 +88,10 @@ class YuMiOculusInterface(YuMiROSInterface):
             enable=data.enable
         )
         
+    def sample_home_pose(self):
+        self.noise_home_noise = onp.random.uniform(-self.joint_noise, self.joint_noise, size=self.rest_pose.shape)
+        self.noise_home_noise = self.rest_pose + self.noise_home_noise
+
     def handle_data(self, data: VRPolicyAction):
         if self.collect_data:
             if data.traj_success and not self._saving_data:
@@ -99,6 +107,7 @@ class YuMiOculusInterface(YuMiROSInterface):
                 self._saving_data = True
                 self.save_success()
                 self._homing = True
+                self.sample_home_pose()
                 rospy.sleep(1.5)
                 self._homing = False
                 self.start_record()
@@ -118,6 +127,7 @@ class YuMiOculusInterface(YuMiROSInterface):
                 self._saving_data = True
                 self.save_failure()
                 self._homing = True
+                self.sample_home_pose()
                 rospy.sleep(1.5)
                 self._homing = False
                 self.start_record()
@@ -129,6 +139,25 @@ class YuMiOculusInterface(YuMiROSInterface):
             self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
             self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
             self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
+
+    def home(self):
+        if self.noise_home_noise is None:
+            self.joints = self.rest_pose
+        else:
+            self.joints = self.noise_home_noise
+        # Update real robot transform frames
+        fk_frames = self.kin.forward_kinematics(self.joints.copy())
+        
+        for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+            joint_idx = self.kin.joint_names.index(joint_name)
+            T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
+            self.update_target_pose(
+                side=side,
+                position=onp.array(T_target_world.translation()),
+                wxyz=onp.array(T_target_world.rotation().wxyz),
+                gripper_state=False,
+                enable=False
+            )
 
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller

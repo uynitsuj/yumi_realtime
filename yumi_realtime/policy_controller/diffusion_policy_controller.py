@@ -3,6 +3,7 @@ from loguru import logger
 import numpy as onp
 import tyro
 import rospy
+from typing import Literal
 from yumi_realtime.base import YuMiBaseInterface
 from yumi_realtime.policy_controller.utils.utils import *
 # from dp_gs.dataset.utils import *
@@ -50,7 +51,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
     
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(5) # 250Hz control loop          
+        rate = rospy.Rate(150) # 150Hz control loop          
         self.home()
         i = 0
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
@@ -70,16 +71,20 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
-            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0).unsqueeze(2) # [B, T, 1, D]
+            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, 1, D] # TODO remove the unsqueeze(2) from proprio
                 }
                     
+            # action_prediction = self.model(input, denormalize=False) # Denoise action prediction from obs and proprio...
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             # action_prediction [B, T, D]
+            print("action: ", action_prediction[0, 0, :10])
             
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             
-            action_L = convert_abs_action(action_prediction[:,:,:10],self.cur_proprio[:10][None,None])[0]
-            action_R = convert_abs_action(action_prediction[:,:,10:],self.cur_proprio[10:][None,None])[0]
+            # action_L = convert_abs_action(action_prediction[:,:,:10],self.cur_proprio[:10][None,None])[0]
+            # action_R = convert_abs_action(action_prediction[:,:,10:],self.cur_proprio[10:][None,None])[0]
+            action_L = action_prediction[0,:,:10]
+            action_R = action_prediction[0,:,10:]
             
             action = onp.concatenate([action_L, action_R], axis=-1)
             
@@ -99,14 +104,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             ######################################################################
             l_act = action_10d_to_8d(action[:10])
             r_act = action_10d_to_8d(action[10:])
-            l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1] 
+            l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
             r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
             
             super().update_target_pose(
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=l_gripper_cmd < 0.015, # Binary
+            gripper_state=l_gripper_cmd < 0.019, # Binary
             enable=True
             )
             
@@ -114,7 +119,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=r_gripper_cmd < 0.015, # Binary
+            gripper_state=r_gripper_cmd < 0.019, # Binary
             enable=True
             )
             ######################################################################
@@ -173,9 +178,22 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.home() # Move to home position as first action
         rospy.sleep(5)
         
+    def plot_action_queue(self, side: Literal['left', 'right'] = None, color: Tuple = (255,0,0), size: int = 5):
+        """Plot the action queue for the given side."""
+        
+        for i, action in enumerate(self.action_queue):
+            if side == 'left':
+                self.plot_action(action[:10], color, size)
+            elif side == 'right':
+                self.plot_action(action[10:], color, size)
+            
+    
 def main(
-    ckpt_path: str = "/home/xi/checkpoints/241121_1818",
-    ckpt_id: int = 99
+    # ckpt_path: str = "/home/xi/checkpoints/241122_1324",
+    # ckpt_path: str = "/home/xi/checkpoints/simplepolicy_241122_1526",
+    # ckpt_path: str = "/home/xi/checkpoints/simple_policy_241122_1644",
+    ckpt_path: str = "/home/xi/checkpoints/241124_2117",
+    ckpt_id: int = 60
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
