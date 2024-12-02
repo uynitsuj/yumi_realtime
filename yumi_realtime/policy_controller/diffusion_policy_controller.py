@@ -14,6 +14,7 @@ from collections import deque
 from scipy.spatial.transform import Rotation
 import PIL.Image as PILimage
 import torch
+import time
 
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
@@ -67,19 +68,22 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 logger.info("Waiting for camera topic or robot pose data...")
                 i = 0
             i += 1
-
+        
+        rospy.sleep(1.5)
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, 1, D] # TODO remove the unsqueeze(2) from proprio
                 }
                     
+            start = time.time()
             # action_prediction = self.model(input, denormalize=False) # Denoise action prediction from obs and proprio...
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             # action_prediction [B, T, D]
-            print("action: ", action_prediction[0, 0, :10])
             
-            # import pdb; pdb.set_trace()
+            # print("action: ", action_prediction[0, 0, :10])
+            print("freq: ", 1/(time.time() - start))
+            # start = time.time()
             
             # action_L = convert_abs_action(action_prediction[:,:,:10],self.cur_proprio[:10][None,None])[0]
             # action_R = convert_abs_action(action_prediction[:,:,10:],self.cur_proprio[10:][None,None])[0]
@@ -88,17 +92,26 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             action = onp.concatenate([action_L, action_R], axis=-1)
             
-            # temporal emsemble start
-            new_actions = deque(action[:self.model.model.action_horizon])
-            self.action_queue.append(new_actions)
-            actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
+            # only first action
+            action = action[10]
             
-            k = 0.05
-            for i, q in enumerate(self.action_queue):
-                actions_current_timestep[i] = q.popleft()
-            exp_weights = onp.exp(k * onp.arange(actions_current_timestep.shape[0]))
-            exp_weights = exp_weights / exp_weights.sum()
-            action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
+            # # temporal emsemble start
+            # new_actions = deque(action[:self.model.model.action_horizon])
+            # self.action_queue.append(new_actions)
+            # actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
+            
+            # k = 0.05
+            # for i, q in enumerate(self.action_queue):
+            #     actions_current_timestep[i] = q.popleft()
+            # exp_weights = onp.exp(k * onp.arange(actions_current_timestep.shape[0]))
+            # exp_weights = exp_weights / exp_weights.sum()
+            # action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
+            
+            # # receeding horizon 
+            # if len(self.action_queue) == 0: 
+            #     # self.action_queue = deque([a for a in action[:self.model.model.action_horizon]]) 
+            #     self.action_queue = deque([a for a in action[:10]]) 
+            # action = self.action_queue.popleft()
             
             # YuMi action update
             ######################################################################
@@ -106,6 +119,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             r_act = action_10d_to_8d(action[10:])
             l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
             r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
+            print(l_xyz)
             
             super().update_target_pose(
             side='left',
@@ -192,8 +206,12 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/241122_1324",
     # ckpt_path: str = "/home/xi/checkpoints/simplepolicy_241122_1526",
     # ckpt_path: str = "/home/xi/checkpoints/simple_policy_241122_1644",
-    ckpt_path: str = "/home/xi/checkpoints/241124_2117",
-    ckpt_id: int = 60
+    # ckpt_path: str = "/home/xi/checkpoints/241124_2117",
+    # ckpt_path: str = "/home/xi/checkpoints/241125_2130",
+    # ckpt_path: str = "/home/xi/checkpoints/241126_1511",
+    # ckpt_path: str = "/home/xi/checkpoints/241126_1646",
+    ckpt_path: str = "/home/xi/checkpoints/241126_1727",
+    ckpt_id: int = 65
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)

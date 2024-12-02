@@ -75,7 +75,7 @@ class DataCollector:
         self.current_action_L_buffer = []
         self.current_action_R_buffer = []
 
-        self.max_buffer_length_egm = 350
+        self.max_buffer_length_egm = 500
         self.current_joint_buffer_egm = []
 
         # Initialize message filters for synchronization
