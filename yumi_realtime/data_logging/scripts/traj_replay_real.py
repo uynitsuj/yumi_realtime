@@ -43,7 +43,7 @@ def np_to_plotly(im):
     return fig
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger/robot_trajectory_2024_11_20_21_50_43.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241202/robot_trajectory_2024_12_02_23_26_43.h5',
     ):
     
     h5_file_path = Path(h5_file_path)
@@ -76,6 +76,8 @@ def main(
     cartesian = f['state/cartesian/cartesian_pose'][:]
 
     cartesian_action = f['action/cartesian_pose'][:]
+    
+    # import pdb; pdb.set_trace()
     
     yumi.urdf_vis.update_cfg(config)
     
@@ -138,14 +140,14 @@ def main(
             side = 'left',
             position = cartesian_action[slider_handle.value, 4:7],
             wxyz = cartesian_action[slider_handle.value, 0:4],
-            gripper_state = 0,
+            gripper_state = angles[slider_handle.value, -1] < 0.013,
             enable = True)
         
         yumi.update_target_pose(
             side = 'right',
             position = cartesian_action[slider_handle.value, 11:14],
             wxyz = cartesian_action[slider_handle.value, 7:11],
-            gripper_state = 0,
+            gripper_state = angles[slider_handle.value, -2] < 0.013,
             enable = True)
         
         yumi.solve_ik()
@@ -175,7 +177,7 @@ def main(
         if play:
             slider_handle.value = (slider_handle.value + 1) % f['state/joint/joint_angle_rad'].shape[0]
             
-        time.sleep(1/30)
+        time.sleep(1/240)
 
 if __name__ == "__main__":
     tyro.cli(main)

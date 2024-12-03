@@ -175,7 +175,7 @@ def main(
         
     if collect_data:
         logger.info("Start data collection service")
-        data_collector = DataCollector(init_node=False)
+        data_collector = DataCollector(init_node=False, task_name='pick_tiger_241202')
         yumi_interface._setup_collectors()
     yumi_interface.run()
     

@@ -6,6 +6,7 @@ import jaxlie
 import numpy as onp
 import time
 import threading
+from typing import Literal
 
 import rospy
 from sensor_msgs.msg import JointState
@@ -93,6 +94,8 @@ class YuMiROSInterface(YuMiBaseInterface):
             # Initialize gripper states
             self.prev_gripper_L = 0
             self.prev_gripper_R = 0
+            self.gripper_L_pos = None
+            self.gripper_R_pos = None
             self.egm_active = False
             self._homing = False
 
@@ -315,14 +318,14 @@ class YuMiROSInterface(YuMiBaseInterface):
             self.start_egm_control()
             rospy.sleep(1.0)
     
-    def update_target_pose(self, side: str, position: onp.ndarray, wxyz: onp.ndarray, gripper_state: bool, enable: bool):
+    def update_target_pose(self, side: str, position: onp.ndarray, wxyz: onp.ndarray, gripper_state: bool | float, enable: bool):
         """Update target pose and gripper state for a given arm.
         
         Args:
             side: Either 'left' or 'right'
             position: 3D position array [x, y, z]
             wxyz: Quaternion array [w, x, y, z]
-            gripper_state: True for close, False for open
+            gripper_state: True for close, False for open, or float for fine position control (meters) [0, 0.025]
             enable: Whether to update the target or snap to current position
         """
         if side not in ['left', 'right']:
@@ -350,9 +353,15 @@ class YuMiROSInterface(YuMiBaseInterface):
                     target_handle.control.visible = False
                 target_handle.control.position = real_handle.position
                 target_handle.control.wxyz = real_handle.wxyz
-        self.call_gripper(side, gripper_state, enable)
+                
+        if type(gripper_state) == bool:
+            self.call_gripper(side, gripper_state, enable)
+        elif type(gripper_state) == float:
+            self.call_gripper_pos(side, gripper_state, enable)
+        else:
+            raise ValueError(f"Invalid type gripper_state {gripper_state}, must be bool or float")
         
-    def call_gripper(self, side: str, gripper_state: bool, enable: bool):       
+    def call_gripper(self, side: Literal['left', 'right'], gripper_state: bool, enable: bool):       
         # Call gripper I/O services
         prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
         if enable:
@@ -365,7 +374,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                         self.prev_gripper_L = 4
                     else:
                         self.prev_gripper_R = 4
-                    time.sleep(0.15)
+                    time.sleep(0.05)
                     self.set_io("RUN_SG_ROUTINE", "0")
             else:
                 if prev_gripper != 5:
@@ -376,13 +385,118 @@ class YuMiROSInterface(YuMiBaseInterface):
                         self.prev_gripper_L = 5
                     else:
                         self.prev_gripper_R = 5
-                    time.sleep(0.15)
+                    time.sleep(0.05)
                     self.set_io("RUN_SG_ROUTINE", "0")
-                    
+    
+    def call_gripper_pos(self, side: Literal['left', 'right'], gripper_state: float, enable: bool):
+        # Call gripper position control I/O services
+        """
+        gripper_state: float in meters [0, 0.025]
+        """
+        prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
+        if enable:
+            self.set_io(f"cmd_GripperState_{side[0].upper()}", "0")
+            self.set_io(f"cmd_GripperState_{side[0].upper()}", "3")
+            self.set_io(f"cmd_GripperPos_{side[0].upper()}", str(int(gripper_state*1000)))
+            
+            time.sleep(0.02)
+            self.set_io("RUN_SG_ROUTINE", "1")
+            if side == 'left':
+                self.prev_gripper_L = 3
+            else:
+                self.prev_gripper_R = 3
+            time.sleep(0.05)
+            self.set_io("RUN_SG_ROUTINE", "0")
+            time.sleep(0.05)
+
+    def calib_gripper(self, side: Literal['left', 'right']):    
+        # Call gripper calib I/O services
+        prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
+        if prev_gripper != 2:
+            self.set_io(f"cmd_GripperState_{side[0].upper()}", "2")
+            time.sleep(0.05)
+            self.set_io("RUN_SG_ROUTINE", "1")
+            if side == 'left':
+                self.prev_gripper_L = 2
+            elif side == 'right':
+                self.prev_gripper_R = 2
+            else:
+                raise ValueError(f"Invalid side {side}, must be 'left' or 'right'")
+            time.sleep(0.05)
+            self.set_io("RUN_SG_ROUTINE", "0")
+    
+    def add_gui_readout(self):
+        self.gui_readout = viser.widgets.Text(
+            self.server,
+            text="YuMi Realtime Control",
+            position=(0.5, 0.95),
+            font_size=24,
+            color=(0.0, 0.0, 0.0),
+            anchor_x="center",
+            anchor_y="center",
+        )
+        
+    def add_gui_gripper_controls(self):
+        while self.gripper_L_pos is None or self.gripper_R_pos is None:
+            time.sleep(1.0)
+        with self.server.gui.add_folder("Gripper Controls"):
+            self.left_grip_gui_slider = self.server.gui.add_slider(
+                "Left Gripper (mm)",
+                min=0.0,
+                max=25.0,
+                step=1.5,
+                initial_value=int(self.gripper_L_pos)/10,
+            )
+            self.joints = self.joints.at[15].set(int(self.gripper_L_pos)/10000)
+            self.bin_left_grip_button_group = self.server.gui.add_button_group(
+                label="Left Gripper Actions",
+                options=["Calibrate", "Open", "Close"],
+            )
+            self.right_grip_gui_slider = self.server.gui.add_slider(
+                "Right Gripper (mm)",
+                min=0.0,
+                max=25.0,
+                step=1.5,
+                initial_value=int(self.gripper_R_pos)/10,
+            )
+            self.joints = self.joints.at[14].set(int(self.gripper_R_pos)/10000)
+            self.bin_right_grip_button_group = self.server.gui.add_button_group(
+                label="Right Gripper Actions",
+                options=["Calibrate", "Open", "Close"],
+            )
+        @self.left_grip_gui_slider.on_update
+        def _(_) -> None:
+            """Callback for left gripper control."""
+            self.call_gripper_pos('left', self.left_grip_gui_slider.value/1000, True)
+            self.joints = self.joints.at[15].set(self.left_grip_gui_slider.value/1000)
+        @self.right_grip_gui_slider.on_update
+        def _(_) -> None:
+            """Callback for right gripper control."""
+            self.call_gripper_pos('right', self.right_grip_gui_slider.value/1000, True)
+            self.joints = self.joints.at[14].set(self.right_grip_gui_slider.value/1000)
+        @self.bin_left_grip_button_group.on_click
+        def _(_) -> None:
+            """Callback for left gripper actions."""
+            if self.bin_left_grip_button_group.value == "Calibrate":
+                self.calib_gripper('left')
+            elif self.bin_left_grip_button_group.value == "Open":
+                self.left_grip_gui_slider.value = 25.0
+            elif self.bin_left_grip_button_group.value == "Close":
+                self.left_grip_gui_slider.value = 0.0
+        @self.bin_right_grip_button_group.on_click
+        def _(_) -> None:
+            """Callback for right gripper actions."""
+            if self.bin_right_grip_button_group.value == "Calibrate":
+                self.calib_gripper('right')
+            elif self.bin_right_grip_button_group.value == "Open":
+                self.right_grip_gui_slider.value = 25.0
+            elif self.bin_right_grip_button_group.value == "Close":
+                self.right_grip_gui_slider.value = 0.0
+    
     def run(self):
         """Override main run loop to include ROS control."""
         rate = rospy.Rate(150)  # 150Hz control loop          
-        
+        self.add_gui_gripper_controls()
         while not rospy.is_shutdown():
             # Run base class IK and visualization updates
             super().solve_ik()
@@ -409,6 +523,7 @@ class YuMiROSInterface(YuMiBaseInterface):
             ], dtype=onp.float32)
         msg = Float64MultiArray(data=joint_desired)
         self.joint_pub.publish(msg)
+    
 
 if __name__ == "__main__":
     yumi_interface = YuMiROSInterface()

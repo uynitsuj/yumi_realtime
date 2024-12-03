@@ -42,7 +42,7 @@ def np_to_plotly(im):
     return fig
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241123/robot_trajectory_2024_11_23_19_24_18.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241202/robot_trajectory_2024_12_02_23_26_43.h5',
     ):
     
     h5_file_path = Path(h5_file_path)

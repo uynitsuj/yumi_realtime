@@ -70,6 +70,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             i += 1
         
         rospy.sleep(1.5)
+        step = 0
+        output_dir = "/home/xi/yumi_realtime/debugging_output"
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
@@ -81,6 +83,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             # action_prediction [B, T, D]
             
+            # out_dict = {
+            #     "observaiton": input["observation"].numpy(),
+            #     "proprio": input["proprio"].numpy(),
+            #     "action": action_prediction,
+            # }
+            # onp.save(f"{output_dir}/output_{step}.npy", out_dict)
+            # step += 1
+
             # print("action: ", action_prediction[0, 0, :10])
             print("freq: ", 1/(time.time() - start))
             # start = time.time()
@@ -92,8 +102,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             action = onp.concatenate([action_L, action_R], axis=-1)
             
-            # only first action
-            action = action[10]
+            # # only first action
+            # action = action[0]
             
             # # temporal emsemble start
             # new_actions = deque(action[:self.model.model.action_horizon])
@@ -107,11 +117,11 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # exp_weights = exp_weights / exp_weights.sum()
             # action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
             
-            # # receeding horizon 
-            # if len(self.action_queue) == 0: 
-            #     # self.action_queue = deque([a for a in action[:self.model.model.action_horizon]]) 
-            #     self.action_queue = deque([a for a in action[:10]]) 
-            # action = self.action_queue.popleft()
+            # receeding horizon 
+            if len(self.action_queue) == 0: 
+                # self.action_queue = deque([a for a in action[:self.model.model.action_horizon]]) 
+                self.action_queue = deque([a for a in action[:10]]) 
+            action = self.action_queue.popleft()
             
             # YuMi action update
             ######################################################################
@@ -119,13 +129,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             r_act = action_10d_to_8d(action[10:])
             l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
             r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
-            print(l_xyz)
+            print("left xyz: ", l_xyz)
+            print("left gripper: ", l_gripper_cmd)
             
             super().update_target_pose(
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=l_gripper_cmd < 0.019, # Binary
+            gripper_state=l_gripper_cmd, # Binary
             enable=True
             )
             
@@ -133,7 +144,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=r_gripper_cmd < 0.019, # Binary
+            gripper_state=r_gripper_cmd, # Binary
             enable=True
             )
             ######################################################################
@@ -174,10 +185,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
             return
         
-        while len(self.image_primary) < self.model.model.obs_horizon:
+        while len(self.image_primary) < self.model.model.obs_horizon - 1:
             self.image_primary.append(new_obs)
             self.update_curr_proprio()
 
+        self.image_primary.append(new_obs)
+        self.update_curr_proprio()
+        
+        # Ensure both buffers are full at this point
         assert len(self.image_primary) == self.model.model.obs_horizon
         assert len(self.proprio_buffer) == self.model.model.obs_horizon
               
@@ -210,8 +225,12 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/241125_2130",
     # ckpt_path: str = "/home/xi/checkpoints/241126_1511",
     # ckpt_path: str = "/home/xi/checkpoints/241126_1646",
-    ckpt_path: str = "/home/xi/checkpoints/241126_1727",
-    ckpt_id: int = 65
+    # ckpt_path: str = "/home/xi/checkpoints/241126_1727",
+    # ckpt_path: str = "/home/xi/checkpoints/241127_1049",
+    # ckpt_path: str = "/home/xi/checkpoints/241202_1331",
+    ckpt_path: str = "/home/xi/checkpoints/241202_2333",
+    # ckpt_path: str = "/home/xi/checkpoints/241202_2334",
+    ckpt_id: int = 60
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)

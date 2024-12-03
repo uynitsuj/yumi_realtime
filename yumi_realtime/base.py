@@ -135,7 +135,8 @@ class YuMiBaseInterface:
         self.smooth_handle = self.server.gui.add_checkbox("Smooth", initial_value=True)
         
         # Add manipulability controls
-        with self.server.gui.add_folder("Manipulability"):
+        with self.server.gui.add_folder("Manipulability") as manip_folder:
+            manip_folder.expand_by_default = False
             self.manipulability_weight_handle = self.server.gui.add_slider(
                 "weight", 0.0, 0.01, 0.001, 0.00
             )
@@ -151,13 +152,15 @@ class YuMiBaseInterface:
         self.base_dof_handles = []
         self.target_dof_handles = []
         
-        with self.server.gui.add_folder("T_base_world"):
+        with self.server.gui.add_folder("T_base_world") as T_base_world_folder:
+            T_base_world_folder.expand_by_default = False
             for dof in ["x", "y", "z", "rx", "ry", "rz"]:
                 self.base_dof_handles.append(
                     self.server.gui.add_checkbox(f"Freeze {dof}", initial_value=True)
                 )
                 
-        with self.server.gui.add_folder("Target pose DoF"):
+        with self.server.gui.add_folder("Target pose DoF") as target_pose_dof_folder:
+            target_pose_dof_folder.expand_by_default = False
             for dof in ["x", "y", "z", "rx", "ry", "rz"]:
                 self.target_dof_handles.append(
                     self.server.gui.add_checkbox(f"Freeze {dof}", initial_value=True)
