@@ -136,7 +136,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=l_gripper_cmd, # Binary
+            gripper_state=l_gripper_cmd, 
             enable=True
             )
             
@@ -144,7 +144,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=r_gripper_cmd, # Binary
+            gripper_state=r_gripper_cmd, 
             enable=True
             )
             ######################################################################
