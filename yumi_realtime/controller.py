@@ -365,7 +365,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         # Call gripper I/O services
         prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
         if enable:
-            if bool(gripper_state):
+            if gripper_state:
                 if prev_gripper != 4:
                     self.set_io(f"cmd_GripperState_{side[0].upper()}", "4")
                     time.sleep(0.05)

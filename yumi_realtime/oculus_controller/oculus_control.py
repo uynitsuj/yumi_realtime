@@ -59,7 +59,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             side='left',
             position=l_xyz,
             wxyz=l_wxyz,
-            gripper_state=data.target_gripper_pos,
+            gripper_state=bool(data.target_gripper_pos),
             enable=data.enable
         )
         
@@ -84,7 +84,7 @@ class YuMiOculusInterface(YuMiROSInterface):
             side='right',
             position=r_xyz,
             wxyz=r_wxyz,
-            gripper_state=data.target_gripper_pos,
+            gripper_state=bool(data.target_gripper_pos),
             enable=data.enable
         )
         
