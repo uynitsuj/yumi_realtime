@@ -9,7 +9,7 @@
 *.catkin_tools
 /dependencies/*
 trajectories/*
-
+debugging_output/*
 *.egg-info
 
 /dependencies/oculus_reader/oculus_reader/APK/teleop-debug.apk
