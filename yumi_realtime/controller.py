@@ -92,16 +92,16 @@ class YuMiROSInterface(YuMiBaseInterface):
                 self._egm_state_callback
             )
             
-            try:
-                self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
-                self.bridge = CvBridge()
-                with self.server.gui.add_folder("Observation"):
-                    self.image_handle = self.server.gui.add_image(
-                        image=onp.zeros((480, 840, 3), dtype=onp.uint8),
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to subscribe to camera topic: {e}")
-                self.image_sub = None
+            # try:
+            #     self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+            #     self.bridge = CvBridge()
+            #     with self.server.gui.add_folder("Observation"):
+            #         self.image_handle = self.server.gui.add_image(
+            #             image=onp.zeros((480, 840, 3), dtype=onp.uint8),
+            #         )
+            # except Exception as e:
+            #     logger.warning(f"Failed to subscribe to camera topic: {e}")
+            #     self.image_sub = None
             
             # Initialize gripper states
             self.prev_gripper_L = 0

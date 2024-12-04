@@ -7,7 +7,7 @@ from sensor_msgs.msg import CameraInfo
 class CameraPublisher:
     def __init__(
         self, 
-        device_id: int=1,
+        device_id: int=0,
         name: str='camera_0',
         image_height: int=480,
         image_width: int=848,

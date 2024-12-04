@@ -35,22 +35,26 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # ROS Camera Observation Subscriber
         self.height = None
         self.width = None
+        # if 'image_sub' not in self.__dict__.keys():
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
         
         self.proprio_buffer = deque([],maxlen=self.model.model.obs_horizon)
         self.image_primary, self.image_wrist = deque([],maxlen=self.model.model.obs_horizon), deque([],maxlen=self.model.model.obs_horizon)
-        self.action_queue = deque([],maxlen=self.model.model.action_horizon)
+        self.action_queue = deque([],maxlen=self.model.model.action_horizon//2)
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         self.cur_proprio = None
         
         self.cartesian_pose_L = None
         self.cartesian_pose_R = None
         
+        self.control_mode = 'receeding_horizon_control'
+        # self.control_mode = 'temporal_ensemble'
+        
         self.bridge = CvBridge()
         
         logger.info("Diffusion Policy controller initialized")
 
-        self.gripper_thres = 0.019
+        self.gripper_thres = 0.014
     
     def run(self):
         """Diffusion Policy controller loop."""
@@ -104,60 +108,46 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 print("lag: ", lag)
 
                 # if they are in disgreemnt, gripper control with last action 
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
+                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
                     self._yumi_control(self.last_action, rate)
                     continue
 
             # receeding horizon control
-            if len(self.action_queue) > 0:
-                action = self.action_queue.popleft()
-                self._yumi_control(action, rate)
-                continue
+            if self.control_mode == 'receeding_horizon_control':
+                if len(self.action_queue) > 0:
+                    action = self.action_queue.popleft()
+                    self._yumi_control(action, rate)
+                    continue
             # end of receeding horizon control
                 
-            # action_prediction = self.model(input, denormalize=False) # Denoise action prediction from obs and proprio...
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
-            # action_prediction [B, T, D]
-            
-            # out_dict = {
-            #     "observaiton": input["observation"].numpy(),
-            #     "proprio": input["proprio"].numpy(),
-            #     "action": action_prediction,
-            # }
-            # onp.save(f"{output_dir}/output_{step}.npy", out_dict)
-            # step += 1
 
-            # print("action: ", action_prediction[0, 0, :10])
-            print("freq: ", 1/(time.time() - start))
-            # start = time.time()
-            
-            # action_L = convert_abs_action(action_prediction[:,:,:10],self.cur_proprio[:10][None,None])[0]
-            # action_R = convert_abs_action(action_prediction[:,:,10:],self.cur_proprio[10:][None,None])[0]
             action_L = action_prediction[0,:,:10]
             action_R = action_prediction[0,:,10:]
             
             action = onp.concatenate([action_L, action_R], axis=-1)
-            
-            # # only first action
-            # action = action[0]
-            
+                        
             # # temporal emsemble start
-            # new_actions = deque(action[:self.model.model.action_horizon])
-            # self.action_queue.append(new_actions)
-            # actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
-            
-            # k = 0.05
-            # for i, q in enumerate(self.action_queue):
-            #     actions_current_timestep[i] = q.popleft()
-            # exp_weights = onp.exp(k * onp.arange(actions_current_timestep.shape[0]))
-            # exp_weights = exp_weights / exp_weights.sum()
-            # action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
-            
+            if self.control_mode == 'temporal_ensemble':
+                new_actions = deque(action[:self.model.model.action_horizon])
+                self.action_queue.append(new_actions)
+                actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
+                
+                k = 0.02
+                for i, q in enumerate(self.action_queue):
+                    actions_current_timestep[i] = q.popleft()
+                exp_weights = onp.exp(k * onp.arange(actions_current_timestep.shape[0]))
+                exp_weights = exp_weights / exp_weights.sum()
+                action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
+                action[9] = action_L[-1,-1]
+                action[19] = action_R[-1,-1]
+                
             # receeding horizon # check the receeding horizon block as well
-            if len(self.action_queue) == 0: 
-                # self.action_queue = deque([a for a in action[:self.model.model.action_horizon]]) 
-                self.action_queue = deque([a for a in action[:10]]) 
-            action = self.action_queue.popleft()
+            if self.control_mode == 'receeding_horizon_control':
+                if len(self.action_queue) == 0: 
+                    self.action_queue = deque([a for a in action])
+                action = self.action_queue.popleft()
             
             # update yumi action 
             self._yumi_control(action, rate)
@@ -213,6 +203,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.proprio_buffer.append(self.cur_proprio)
     
     def image_callback(self, image_msg: Image):
+
         """Handle camera observation updates."""
         if self.height is None and self.width is None:
             self.height = image_msg.height
@@ -259,32 +250,19 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
     
 def main(
-    # ckpt_path: str = "/home/xi/checkpoints/241122_1324",
-    # ckpt_path: str = "/home/xi/checkpoints/simplepolicy_241122_1526",
-    # ckpt_path: str = "/home/xi/checkpoints/simple_policy_241122_1644",
-    # ckpt_path: str = "/home/xi/checkpoints/241124_2117",
-    # ckpt_path: str = "/home/xi/checkpoints/241125_2130",
-    # ckpt_path: str = "/home/xi/checkpoints/241126_1511",
-    # ckpt_path: str = "/home/xi/checkpoints/241126_1646",
-    # ckpt_path: str = "/home/xi/checkpoints/241126_1727",
-    # ckpt_path: str = "/home/xi/checkpoints/241127_1049",
-    # ckpt_path: str = "/home/xi/checkpoints/241202_1331",
-    # ckpt_path: str = "/home/xi/checkpoints/241202_2333",
-    # ckpt_path: str = "/home/xi/checkpoints/241202_2334",
-    # ckpt_path: str = "/home/xi/checkpoints/241203_1259",
     # some signal 
-    # ckpt_path : str = "/home/xi/checkpoints/241203_2001", 
+    # ckpt_path : str = "/home/xi/checkpoints/241203_2002", 
     # ckpt_id: int = 99
     
     # Dec 4
-    ckpt_path : str = "/home/xi/checkpoints/241203_2104", 
-    ckpt_id : int = 299,
+    # ckpt_path : str = "/home/xi/checkpoints/241203_2104", 
+    # ckpt_id : int = 299,
 
     # ckpt_path : str = "/home/xi/checkpoints/241203_217", 
     # ckpt_id : int = 299,
 
-    # ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
-    # ckpt_id : int = 599,
+    ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
+    ckpt_id : int = 599,
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
