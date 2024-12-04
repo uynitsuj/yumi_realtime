@@ -49,10 +49,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.bridge = CvBridge()
         
         logger.info("Diffusion Policy controller initialized")
+
+        self.gripper_thres = 0.019
     
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(150) # 150Hz control loop          
+        rate = rospy.Rate(15) # 150Hz control loop          
         self.home()
         i = 0
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
@@ -72,13 +74,47 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         rospy.sleep(1.5)
         step = 0
         output_dir = "/home/xi/yumi_realtime/debugging_output"
+        self.last_action = None
         while not rospy.is_shutdown():
             input = {
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
-            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, 1, D] # TODO remove the unsqueeze(2) from proprio
+            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
                 }
                     
             start = time.time()
+            print("current step: ", step)
+            step += 1
+            print("current proprio left: ", input["proprio"][0, -1, :3])
+            print("current gripper left: ", input["proprio"][0, -1, 9])
+
+            if self.last_action is not None:
+                # check gripper state of last action 
+                target_left_gripper = self.last_action[9] < self.gripper_thres
+                target_right_gripper = self.last_action[19] < self.gripper_thres
+
+                current_left_gripper = input["proprio"][0, -1, 9] < self.gripper_thres
+                current_right_gripper = input["proprio"][0, -1, 19] < self.gripper_thres
+
+                # delta pose 
+                target_proprio_left = self.last_action[:3]
+                current_proprio_left = input["proprio"][0, -1, :3].numpy()
+            
+                # calculate lag 
+                lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
+                print("lag: ", lag)
+
+                # if they are in disgreemnt, gripper control with last action 
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
+                    self._yumi_control(self.last_action, rate)
+                    continue
+
+            # receeding horizon control
+            if len(self.action_queue) > 0:
+                action = self.action_queue.popleft()
+                self._yumi_control(action, rate)
+                continue
+            # end of receeding horizon control
+                
             # action_prediction = self.model(input, denormalize=False) # Denoise action prediction from obs and proprio...
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
             # action_prediction [B, T, D]
@@ -117,43 +153,48 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # exp_weights = exp_weights / exp_weights.sum()
             # action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
             
-            # receeding horizon 
+            # receeding horizon # check the receeding horizon block as well
             if len(self.action_queue) == 0: 
                 # self.action_queue = deque([a for a in action[:self.model.model.action_horizon]]) 
                 self.action_queue = deque([a for a in action[:10]]) 
             action = self.action_queue.popleft()
             
-            # YuMi action update
-            ######################################################################
-            l_act = action_10d_to_8d(action[:10])
-            r_act = action_10d_to_8d(action[10:])
-            l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
-            r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
-            print("left xyz: ", l_xyz)
-            print("left gripper: ", l_gripper_cmd)
-            
-            super().update_target_pose(
-            side='left',
-            position=l_xyz,
-            wxyz=l_wxyz,
-            gripper_state=l_gripper_cmd, 
-            enable=True
-            )
-            
-            super().update_target_pose(
-            side='right',
-            position=r_xyz,
-            wxyz=r_wxyz,
-            gripper_state=r_gripper_cmd, 
-            enable=True
-            )
-            ######################################################################
-            
-            self.solve_ik()
-            self.update_visualization()
-            super().publish_joint_commands()
-            
-            rate.sleep()
+            # update yumi action 
+            self._yumi_control(action, rate)
+    
+    def _yumi_control(self, action, rate):
+        # YuMi action update
+        ######################################################################
+        self.last_action = action
+        l_act = action_10d_to_8d(action[:10])
+        r_act = action_10d_to_8d(action[10:])
+        l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
+        r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
+        print("left xyz: ", l_xyz)
+        print("left gripper: ", l_gripper_cmd)
+        
+        super().update_target_pose(
+        side='left',
+        position=l_xyz,
+        wxyz=l_wxyz,
+        gripper_state=bool(l_gripper_cmd<self.gripper_thres), 
+        enable=True
+        )
+        
+        super().update_target_pose(
+        side='right',
+        position=r_xyz,
+        wxyz=r_wxyz,
+        gripper_state=bool(r_gripper_cmd<self.gripper_thres), 
+        enable=True
+        )
+        ######################################################################
+        
+        self.solve_ik()
+        self.update_visualization()
+        super().publish_joint_commands()
+        
+        rate.sleep()
     
     def update_curr_proprio(self):
         l_xyz, l_xyzw = tf2xyz_quat(self.cartesian_pose_L)
@@ -228,9 +269,22 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/241126_1727",
     # ckpt_path: str = "/home/xi/checkpoints/241127_1049",
     # ckpt_path: str = "/home/xi/checkpoints/241202_1331",
-    ckpt_path: str = "/home/xi/checkpoints/241202_2333",
+    # ckpt_path: str = "/home/xi/checkpoints/241202_2333",
     # ckpt_path: str = "/home/xi/checkpoints/241202_2334",
-    ckpt_id: int = 60
+    # ckpt_path: str = "/home/xi/checkpoints/241203_1259",
+    # some signal 
+    # ckpt_path : str = "/home/xi/checkpoints/241203_2001", 
+    # ckpt_id: int = 99
+    
+    # Dec 4
+    ckpt_path : str = "/home/xi/checkpoints/241203_2104", 
+    ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/checkpoints/241203_217", 
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
+    # ckpt_id : int = 599,
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)

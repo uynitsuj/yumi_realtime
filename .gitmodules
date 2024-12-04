@@ -27,3 +27,6 @@
 [submodule "dependencies/dp_gs"]
 	path = dependencies/dp_gs
 	url = https://github.com/Max-Fu/dp_gs.git
+[submodule "dependencies/viser"]
+	path = dependencies/viser
+	url = https://github.com/nerfstudio-project/viser.git

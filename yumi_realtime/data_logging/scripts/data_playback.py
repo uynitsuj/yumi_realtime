@@ -7,7 +7,6 @@ import h5py
 from pathlib import Path
 from yumi_realtime.base import YuMiBaseInterface
 import time 
-import plotly.express as px
 
 def names_angles_to_dict(names, angles, idx=0):
     config = {
@@ -29,17 +28,6 @@ def names_angles_to_dict(names, angles, idx=0):
         names[15].decode("utf-8"): angles[idx, 15],
     }
     return config
-
-def np_to_plotly(im):
-    fig = px.imshow(im)
-    
-    fig.update_layout(
-    coloraxis_showscale=False, 
-    xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-    yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-    margin=dict(l=0, r=0, t=0, b=0)  
-    )
-    return fig
 
 def main(
     h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241202/robot_trajectory_2024_12_02_23_26_43.h5',
@@ -64,9 +52,12 @@ def main(
         "Data Entry Index", min=0, max=f['state/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
     )
     im = f['observation/camera/image/camera_rgb'][:]
-    fig = np_to_plotly(im[0])
+        
+    with yumi.server.gui.add_folder("Observation"):
+        image_handle = yumi.server.gui.add_image(
+            image=im[0],
+        )
     
-    fig_handle = yumi.server.gui.add_plotly(figure=fig, aspect=im[0].shape[0]/im[0].shape[1])
     names = f['state/joint/joint_name'][:].tolist()[0]
         
     angles = f['state/joint/joint_angle_rad'][:]
@@ -134,9 +125,8 @@ def main(
         tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
 
         yumi.urdf_vis.update_cfg(config)
-        
-        fig = np_to_plotly(im[slider_handle.value])
-        fig_handle.figure = fig
+
+        image_handle.image = im[slider_handle.value]
         
         # print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
         # print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)

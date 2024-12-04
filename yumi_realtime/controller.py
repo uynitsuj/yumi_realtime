@@ -9,7 +9,8 @@ import threading
 from typing import Literal
 
 import rospy
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import Image, JointState
+from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped, Transform, Vector3, Quaternion
 from std_msgs.msg import Float64MultiArray, Header, String, Float64
 from abb_robot_msgs.srv import GetIOSignal, SetIOSignal, TriggerWithResultCode
@@ -90,6 +91,17 @@ class YuMiROSInterface(YuMiBaseInterface):
                 EGMState, 
                 self._egm_state_callback
             )
+            
+            try:
+                self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+                self.bridge = CvBridge()
+                with self.server.gui.add_folder("Observation"):
+                    self.image_handle = self.server.gui.add_image(
+                        image=onp.zeros((480, 840, 3), dtype=onp.uint8),
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to subscribe to camera topic: {e}")
+                self.image_sub = None
             
             # Initialize gripper states
             self.prev_gripper_L = 0
@@ -524,7 +536,10 @@ class YuMiROSInterface(YuMiBaseInterface):
         msg = Float64MultiArray(data=joint_desired)
         self.joint_pub.publish(msg)
     
-
+    def image_callback(self, image_msg):
+        rgb_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8')
+        self.image_handle.image = rgb_image
+        
 if __name__ == "__main__":
     yumi_interface = YuMiROSInterface()
     yumi_interface.run()
