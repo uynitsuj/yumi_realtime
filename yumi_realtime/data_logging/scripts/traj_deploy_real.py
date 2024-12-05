@@ -31,17 +31,6 @@ def names_angles_to_dict(names, angles, idx=0):
     }
     return config
 
-def np_to_plotly(im):
-    fig = px.imshow(im)
-    
-    fig.update_layout(
-    coloraxis_showscale=False, 
-    xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-    yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-    margin=dict(l=0, r=0, t=0, b=0)  
-    )
-    return fig
-
 def main(
     h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241202/robot_trajectory_2024_12_02_23_26_43.h5',
     ):
@@ -64,21 +53,33 @@ def main(
     slider_handle = yumi.server.gui.add_slider(
         "Data Entry Index", min=0, max=f['state/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
     )
-    im = f['observation/camera/image/camera_rgb'][:]
-    fig = np_to_plotly(im[0])
     
-    fig_handle = yumi.server.gui.add_plotly(figure=fig, aspect=im[0].shape[0]/im[0].shape[1])
-    names = f['state/joint/joint_name'][:].tolist()[0]
+    gripper_threshold = 0.019
+    
+    # Observation
+    image_cache = {}
+    viser_img_handles = {}
+    
+    for camera_name in f['observation'].keys():
+        image_cache[camera_name] = f[f'observation/{camera_name}/image/camera_rgb'][:]
         
+    with yumi.server.gui.add_folder("Observation"):
+        for camera_name in f['observation'].keys():
+            viser_img_handles[camera_name] = yumi.server.gui.add_image(
+                image = image_cache[camera_name][0],
+                label = camera_name
+            )
+            
+    # Cartesian
+    names = f['state/joint/joint_name'][:].tolist()[0] 
     angles = f['state/joint/joint_angle_rad'][:]
     config = names_angles_to_dict(names, angles, 0)
-    
     cartesian = f['state/cartesian/cartesian_pose'][:]
 
-    cartesian_action = f['action/cartesian_pose'][:]
-    
-    # import pdb; pdb.set_trace()
-    
+    # Action
+    if 'action' in f.keys():
+        cartesian_action = f['action/cartesian_pose'][:]
+        
     yumi.urdf_vis.update_cfg(config)
     
     tf_left_frame = yumi.server.scene.add_frame(
@@ -129,35 +130,49 @@ def main(
         tf_right_frame.position = cartesian[slider_handle.value, 11:14]
         tf_right_frame.wxyz = cartesian[slider_handle.value, 7:11]
 
-        tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
-        tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
-        tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
-        tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
+        if 'action' in f.keys():
+            tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
+            tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
+            tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
+            tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
 
         yumi.urdf_vis.update_cfg(config)
         
-        yumi.update_target_pose(
-            side = 'left',
-            position = cartesian_action[slider_handle.value, 4:7],
-            wxyz = cartesian_action[slider_handle.value, 0:4],
-            gripper_state = angles[slider_handle.value, -1] < 0.013,
-            enable = True)
-        
-        yumi.update_target_pose(
-            side = 'right',
-            position = cartesian_action[slider_handle.value, 11:14],
-            wxyz = cartesian_action[slider_handle.value, 7:11],
-            gripper_state = angles[slider_handle.value, -2] < 0.013,
-            enable = True)
+        if 'action' in f.keys():
+            yumi.update_target_pose(
+                side = 'left',
+                position = cartesian_action[slider_handle.value, 4:7],
+                wxyz = cartesian_action[slider_handle.value, 0:4],
+                gripper_state = angles[slider_handle.value, -1] < gripper_threshold,
+                enable = True)
+            
+            yumi.update_target_pose(
+                side = 'right',
+                position = cartesian_action[slider_handle.value, 11:14],
+                wxyz = cartesian_action[slider_handle.value, 7:11],
+                gripper_state = angles[slider_handle.value, -2] < gripper_threshold,
+                enable = True)
+        else:
+            yumi.update_target_pose(
+                side = 'left',
+                position = cartesian[slider_handle.value, 4:7],
+                wxyz = cartesian[slider_handle.value, 0:4],
+                gripper_state = angles[slider_handle.value, -1] < gripper_threshold,
+                enable = True)
+            
+            yumi.update_target_pose(
+                side = 'right',
+                position = cartesian[slider_handle.value, 11:14],
+                wxyz = cartesian[slider_handle.value, 7:11],
+                gripper_state = angles[slider_handle.value, -2] < gripper_threshold,
+                enable = True)
         
         yumi.solve_ik()
         yumi.publish_joint_commands()
         
-        fig = np_to_plotly(im[slider_handle.value])
-        fig_handle.figure = fig
+        for camera_name in f['observation'].keys():
+            viser_img_handles[camera_name].image = image_cache[camera_name][slider_handle.value]
         
-        # print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
-        # print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)
     @play_button.on_click
     def _(_) -> None:
         nonlocal play 
