@@ -1,6 +1,7 @@
 from yumi_realtime.base import YuMiBaseInterface, TransformHandle
 from loguru import logger
 import viser
+import tyro
 import jax.numpy as jnp
 import jaxlie
 import numpy as onp
@@ -16,11 +17,13 @@ from std_msgs.msg import Float64MultiArray, Header, String, Float64
 from abb_robot_msgs.srv import GetIOSignal, SetIOSignal, TriggerWithResultCode
 from controller_manager_msgs.srv import SwitchController
 from abb_egm_msgs.msg import EGMState
+from std_srvs.srv import Empty, EmptyResponse
+from yumi_realtime.data_logging.data_collector import DataCollector
 
 class YuMiROSInterface(YuMiBaseInterface):
     """YuMi interface with ROS integration."""
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, collect_data: bool = False, *args, **kwargs):
         # Initialize base class first
         super().__init__(*args, **kwargs)
         
@@ -28,7 +31,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         self._first_js_callback = True
         self._interactive_handles = True
         self._js_update_lock = threading.Lock()
-        
+        self.collect_data = collect_data
         try:
             rospy.init_node('yumi_controller')
             
@@ -92,16 +95,9 @@ class YuMiROSInterface(YuMiBaseInterface):
                 self._egm_state_callback
             )
             
-            # try:
-            #     self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
-            #     self.bridge = CvBridge()
-            #     with self.server.gui.add_folder("Observation"):
-            #         self.image_handle = self.server.gui.add_image(
-            #             image=onp.zeros((480, 840, 3), dtype=onp.uint8),
-            #         )
-            # except Exception as e:
-            #     logger.warning(f"Failed to subscribe to camera topic: {e}")
-            #     self.image_sub = None
+            if self.collect_data:
+                self._setup_collectors()
+                self.add_gui_data_collection_controls()
             
             # Initialize gripper states
             self.prev_gripper_L = 0
@@ -437,16 +433,33 @@ class YuMiROSInterface(YuMiBaseInterface):
             time.sleep(0.05)
             self.set_io("RUN_SG_ROUTINE", "0")
     
-    def add_gui_readout(self):
-        self.gui_readout = viser.widgets.Text(
-            self.server,
-            text="YuMi Realtime Control",
-            position=(0.5, 0.95),
-            font_size=24,
-            color=(0.0, 0.0, 0.0),
-            anchor_x="center",
-            anchor_y="center",
-        )
+    def add_gui_data_collection_controls(self):
+        with self.server.gui.add_folder("Data Collection Controls"):
+            self.start_record_button = self.server.gui.add_button("Start Recording")
+            self.save_success_button = self.server.gui.add_button("Save Success", disabled=True)
+            self.save_failure_button = self.server.gui.add_button("Save Failure", disabled=True)
+            
+        @self.start_record_button.on_click
+        def _(_) -> None:
+            """Callback for start recording."""
+            self.start_record()
+            self.start_record_button.disabled = True
+            self.save_success_button.disabled = False
+            self.save_failure_button.disabled = False
+        @self.save_success_button.on_click
+        def _(_) -> None:
+            """Callback for save success."""
+            self.save_success()
+            self.start_record_button.disabled = False
+            self.save_success_button.disabled = True
+            self.save_failure_button.disabled = True
+        @self.save_failure_button.on_click
+        def _(_) -> None:
+            """Callback for save failure."""
+            self.save_failure()
+            self.start_record_button.disabled = False
+            self.save_success_button.disabled = True
+            self.save_failure_button.disabled = True
         
     def add_gui_gripper_controls(self):
         while self.gripper_L_pos is None or self.gripper_R_pos is None:
@@ -536,10 +549,27 @@ class YuMiROSInterface(YuMiBaseInterface):
         msg = Float64MultiArray(data=joint_desired)
         self.joint_pub.publish(msg)
     
-    def image_callback(self, image_msg):
-        rgb_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8')
-        self.image_handle.image = rgb_image
-        
-if __name__ == "__main__":
-    yumi_interface = YuMiROSInterface()
+    def _setup_collectors(self):
+        if self.collect_data:
+            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
+            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
+            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
+            self.stop_record = rospy.ServiceProxy("/yumi_controller/stop_recording", Empty)
+
+def main(
+    collect_data : bool = True,
+    task_name : str = 'example_task1'
+    ): 
+    
+    yumi_interface = YuMiROSInterface(collect_data=collect_data)
+    
+    if collect_data:
+        logger.info("Start data collection service")
+        data_collector = DataCollector(init_node=False, task_name=task_name)
+        # yumi_interface._setup_collectors()
+        # yumi_interface.add_gui_data_collection_controls()
     yumi_interface.run()
+    
+    
+if __name__ == "__main__":
+    tyro.cli(main)

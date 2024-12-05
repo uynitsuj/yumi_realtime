@@ -35,8 +35,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # ROS Camera Observation Subscriber
         self.height = None
         self.width = None
-        # if 'image_sub' not in self.__dict__.keys():
         self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+        
         
         self.proprio_buffer = deque([],maxlen=self.model.model.obs_horizon)
         self.image_primary, self.image_wrist = deque([],maxlen=self.model.model.obs_horizon), deque([],maxlen=self.model.model.obs_horizon)
@@ -54,7 +54,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         logger.info("Diffusion Policy controller initialized")
 
-        self.gripper_thres = 0.014
+        self.gripper_thres = 0.018
     
     def run(self):
         """Diffusion Policy controller loop."""
@@ -84,7 +84,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
                 }
-                    
+            
             start = time.time()
             print("current step: ", step)
             step += 1

@@ -30,7 +30,7 @@ def names_angles_to_dict(names, angles, idx=0):
     return config
 
 def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/pick_tiger_241202/robot_trajectory_2024_12_02_23_26_43.h5',
+    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/transfer_tiger_241204/robot_trajectory_2024_12_04_18_04_46.h5',
     ):
     
     h5_file_path = Path(h5_file_path)
@@ -47,28 +47,35 @@ def main(
         pause_button = yumi.server.gui.add_button(label = "Pause", icon=viser.Icon.PLAYER_PAUSE_FILLED, visible=False)
         next_button = yumi.server.gui.add_button(label = "Forward", icon=viser.Icon.ARROW_BIG_RIGHT_FILLED)
         prev_button = yumi.server.gui.add_button(label = "Back", icon=viser.Icon.ARROW_BIG_LEFT_FILLED)
-    
+        
     slider_handle = yumi.server.gui.add_slider(
         "Data Entry Index", min=0, max=f['state/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
     )
-    im = f['observation/camera/image/camera_rgb'][:]
+    
+    # Observation
+    image_cache = {}
+    viser_img_handles = {}
+    
+    for camera_name in f['observation'].keys():
+        image_cache[camera_name] = f[f'observation/{camera_name}/image/camera_rgb'][:]
         
     with yumi.server.gui.add_folder("Observation"):
-        image_handle = yumi.server.gui.add_image(
-            image=im[0],
-        )
-    
-    names = f['state/joint/joint_name'][:].tolist()[0]
-        
+        for camera_name in f['observation'].keys():
+            viser_img_handles[camera_name] = yumi.server.gui.add_image(
+                image = image_cache[camera_name][0],
+                label = camera_name
+            )
+            
+    # State
+    names = f['state/joint/joint_name'][:].tolist()[0]    
     angles = f['state/joint/joint_angle_rad'][:]
     config = names_angles_to_dict(names, angles, 0)
-    
     cartesian = f['state/cartesian/cartesian_pose'][:]
 
-    cartesian_action = f['action/cartesian_pose'][:]
-    
-    # import pdb; pdb.set_trace()
-    
+    # Action
+    if 'action' in f.keys():
+        cartesian_action = f['action/cartesian_pose'][:]
+        
     yumi.urdf_vis.update_cfg(config)
     
     tf_left_frame = yumi.server.scene.add_frame(
@@ -77,6 +84,7 @@ def main(
                     axes_radius=0.01 * 0.2,
                     origin_radius=0.1 * 0.2,
                 )
+    
     tf_right_frame = yumi.server.scene.add_frame(
                     "tf_right",
                     axes_length=0.5 * 0.2,
@@ -119,17 +127,17 @@ def main(
         tf_right_frame.position = cartesian[slider_handle.value, 11:14]
         tf_right_frame.wxyz = cartesian[slider_handle.value, 7:11]
 
-        tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
-        tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
-        tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
-        tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
+        if 'action' in f.keys():
+            tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
+            tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
+            tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
+            tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
 
         yumi.urdf_vis.update_cfg(config)
-
-        image_handle.image = im[slider_handle.value]
         
-        # print("\nJoint Time:", f['action/joint/timestamp'][slider_handle.value][0]/1e9)
-        # print("Image Time:", f['observation/camera/image/timestamp'][slider_handle.value][0]/1e9)
+        for camera_name in f['observation'].keys():
+            viser_img_handles[camera_name].image = image_cache[camera_name][slider_handle.value]
+        
     @play_button.on_click
     def _(_) -> None:
         nonlocal play 
@@ -149,7 +157,7 @@ def main(
         if play:
             slider_handle.value = (slider_handle.value + 1) % f['state/joint/joint_angle_rad'].shape[0]
             
-        time.sleep(1/30)
+        time.sleep(1/15)
 
 if __name__ == "__main__":
     tyro.cli(main)

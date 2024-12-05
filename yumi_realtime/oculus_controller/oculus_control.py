@@ -133,12 +133,6 @@ class YuMiOculusInterface(YuMiROSInterface):
                 self.start_record()
                 rospy.sleep(0.5)
                 self._saving_data = False
-    
-    def _setup_collectors(self):
-        if self.collect_data:
-            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
-            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
-            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
 
     def home(self):
         if self.noise_home_noise is None:
@@ -175,7 +169,7 @@ def main(
         
     if collect_data:
         logger.info("Start data collection service")
-        data_collector = DataCollector(init_node=False, task_name='pick_tiger_241202')
+        data_collector = DataCollector(init_node=False, task_name='transfer_tiger_241204')
         yumi_interface._setup_collectors()
     yumi_interface.run()
     
