@@ -35,11 +35,24 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # ROS Camera Observation Subscriber
         self.height = None
         self.width = None
-        self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+        # self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
         
         
         self.proprio_buffer = deque([],maxlen=self.model.model.obs_horizon)
-        self.image_primary, self.image_wrist = deque([],maxlen=self.model.model.obs_horizon), deque([],maxlen=self.model.model.obs_horizon)
+        # self.image_primary, self.image_wrist = deque([],maxlen=self.model.model.obs_horizon), deque([],maxlen=self.model.model.obs_horizon)
+        
+        
+        self.image_buffers = {}
+        self.camera_topics = [topic[0] for topic in rospy.get_published_topics() if 'sensor_msgs/Image' in topic[1]]
+        
+        # Initialize a deque for each camera
+        self.main_camera = "camera_0"
+        for idx, topic in enumerate(self.camera_topics):
+            camera_name = f"camera_{idx}"
+            self.image_buffers[camera_name] = deque([], maxlen=self.model.model.obs_horizon)
+            rospy.Subscriber(topic, Image, self.image_callback, callback_args=(camera_name,))
+            
+        
         self.action_queue = deque([],maxlen=self.model.model.action_horizon//2)
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         self.cur_proprio = None
@@ -56,6 +69,28 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         self.gripper_thres = 0.018
     
+    def image_callback(self, image_msg: Image, camera_name: str):
+        """Handle camera observation updates."""
+        camera_name = camera_name[0]
+        if self.height is None and self.width is None:
+            self.height = image_msg.height
+            self.width = image_msg.width
+            logger.info(f"First image received from {camera_name}; Observation dim: {self.height}x{self.width}x3")
+        
+        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0
+        new_obs = onp.transpose(onp_img, (2, 0, 1))  # C, H, W
+        
+        if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
+            return
+        
+        # Initialize buffer if needed
+        while len(self.image_buffers[camera_name]) < self.model.model.obs_horizon - 1:
+            self.image_buffers[camera_name].append(new_obs)
+            self.update_curr_proprio()
+
+        self.image_buffers[camera_name].append(new_obs)
+        self.update_curr_proprio()
+        
     def run(self):
         """Diffusion Policy controller loop."""
         rate = rospy.Rate(15) # 150Hz control loop          
@@ -77,11 +112,27 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         rospy.sleep(1.5)
         step = 0
-        output_dir = "/home/xi/yumi_realtime/debugging_output"
+        # output_dir = "/home/xi/yumi_realtime/debugging_output"
         self.last_action = None
         while not rospy.is_shutdown():
+            assert len(self.proprio_buffer) == self.model.model.obs_horizon
+            # Stack all camera observations
+            all_camera_obs = []
+            for camera_name in sorted(self.image_buffers.keys()):  # Sort to ensure consistent order
+                assert len(self.image_buffers[camera_name]) == self.model.model.obs_horizon
+                cam_obs = onp.array(self.image_buffers[camera_name])
+                all_camera_obs.append(cam_obs)
+            
+            # Stack along the N_C dimension
+            stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
+            
+            # CAMERA DEBUG
+            # import matplotlib.pyplot as plt
+            # plot_stacked_obs(stacked_obs)
+            # import pdb; pdb.set_trace()
+            
             input = {
-            "observation": torch.from_numpy(onp.array(self.image_primary)).unsqueeze(0).unsqueeze(2), # [B, T, C, N_C, H, W]
+            "observation": torch.from_numpy(stacked_obs).unsqueeze(0),  # [B, T, N_C, C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
                 }
             
@@ -202,31 +253,31 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         self.proprio_buffer.append(self.cur_proprio)
     
-    def image_callback(self, image_msg: Image):
+    # def image_callback(self, image_msg: Image):
 
-        """Handle camera observation updates."""
-        if self.height is None and self.width is None:
-            self.height = image_msg.height
-            self.width = image_msg.width
-            logger.info(f"First image received; Observation dim: {self.height}x{self.width}x3")
+    #     """Handle camera observation updates."""
+    #     if self.height is None and self.width is None:
+    #         self.height = image_msg.height
+    #         self.width = image_msg.width
+    #         logger.info(f"First image received; Observation dim: {self.height}x{self.width}x3")
         
-        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # H, W, C
+    #     onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # H, W, C
         
-        new_obs = onp.transpose(onp_img, (2, 0, 1)) # C, H, W
+    #     new_obs = onp.transpose(onp_img, (2, 0, 1)) # C, H, W
         
-        if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
-            return
+    #     if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
+    #         return
         
-        while len(self.image_primary) < self.model.model.obs_horizon - 1:
-            self.image_primary.append(new_obs)
-            self.update_curr_proprio()
+    #     while len(self.image_primary) < self.model.model.obs_horizon - 1:
+    #         self.image_primary.append(new_obs)
+    #         self.update_curr_proprio()
 
-        self.image_primary.append(new_obs)
-        self.update_curr_proprio()
+    #     self.image_primary.append(new_obs)
+    #     self.update_curr_proprio()
         
-        # Ensure both buffers are full at this point
-        assert len(self.image_primary) == self.model.model.obs_horizon
-        assert len(self.proprio_buffer) == self.model.model.obs_horizon
+    #     # Ensure both buffers are full at this point
+    #     assert len(self.image_primary) == self.model.model.obs_horizon
+    #     assert len(self.proprio_buffer) == self.model.model.obs_horizon
               
     def episode_start(self):
         """Reset the environment and start a new episode."""
@@ -248,7 +299,44 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             elif side == 'right':
                 self.plot_action(action[10:], color, size)
             
-    
+
+
+def plot_stacked_obs(stacked_obs):
+                """
+                Plot stacked observations from multiple cameras across time steps.
+                
+                Args:
+                    stacked_obs: numpy array of shape [T, N_C, C, H, W]
+                    T: number of timesteps
+                    N_C: number of cameras
+                    C: channels (3 for RGB)
+                    H, W: height and width
+                """
+                T, N_C, C, H, W = stacked_obs.shape
+                
+                # Create a grid of subplots
+                fig, axes = plt.subplots(T, N_C, figsize=(4*N_C, 4*T))
+                if T == 1 and N_C == 1:
+                    axes = np.array([[axes]])
+                elif T == 1:
+                    axes = axes.reshape(1, -1)
+                elif N_C == 1:
+                    axes = axes.reshape(-1, 1)
+                
+                # Plot each image
+                for t in range(T):
+                    for nc in range(N_C):
+                        # Transform from [C, H, W] to [H, W, C] for plotting
+                        img = stacked_obs[t, nc].transpose(1, 2, 0)
+                        
+                        # Plot
+                        axes[t, nc].imshow(img)
+                        axes[t, nc].axis('off')
+                        axes[t, nc].set_title(f'Time {t}, Camera {nc}')
+                
+                plt.tight_layout()
+                plt.show()
+                
 def main(
     # some signal 
     # ckpt_path : str = "/home/xi/checkpoints/241203_2002", 
@@ -261,8 +349,11 @@ def main(
     # ckpt_path : str = "/home/xi/checkpoints/241203_217", 
     # ckpt_id : int = 299,
 
-    ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
-    ckpt_id : int = 599,
+    # ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
+    # ckpt_id : int = 599,
+
+    ckpt_path : str = "/home/xi/checkpoints/241205_1219",
+    ckpt_id : int = 299,
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
