@@ -93,7 +93,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(15) # 150Hz control loop          
+        rate = rospy.Rate(150) # 150Hz control loop          
         self.home()
         i = 0
         while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None)):
@@ -171,19 +171,19 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     self._yumi_control(action, rate)
                     continue
             # end of receeding horizon control
-                
+            
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
 
             action_L = action_prediction[0,:,:10]
             action_R = action_prediction[0,:,10:]
             
             action = onp.concatenate([action_L, action_R], axis=-1)
-                        
+                
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
                 new_actions = deque(action[:self.model.model.action_horizon])
                 self.action_queue.append(new_actions)
-                actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
+                actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
                 k = 0.02
                 for i, q in enumerate(self.action_queue):
@@ -252,33 +252,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         assert self.cur_proprio.shape == (20,)
 
         self.proprio_buffer.append(self.cur_proprio)
-    
-    # def image_callback(self, image_msg: Image):
 
-    #     """Handle camera observation updates."""
-    #     if self.height is None and self.width is None:
-    #         self.height = image_msg.height
-    #         self.width = image_msg.width
-    #         logger.info(f"First image received; Observation dim: {self.height}x{self.width}x3")
-        
-    #     onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0  # H, W, C
-        
-    #     new_obs = onp.transpose(onp_img, (2, 0, 1)) # C, H, W
-        
-    #     if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
-    #         return
-        
-    #     while len(self.image_primary) < self.model.model.obs_horizon - 1:
-    #         self.image_primary.append(new_obs)
-    #         self.update_curr_proprio()
-
-    #     self.image_primary.append(new_obs)
-    #     self.update_curr_proprio()
-        
-    #     # Ensure both buffers are full at this point
-    #     assert len(self.image_primary) == self.model.model.obs_horizon
-    #     assert len(self.proprio_buffer) == self.model.model.obs_horizon
-              
     def episode_start(self):
         """Reset the environment and start a new episode."""
         self.image_primary.clear()
