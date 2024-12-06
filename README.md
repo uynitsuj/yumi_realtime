@@ -28,4 +28,4 @@ After a successful install, read the [usage instructions](USAGE_GUIDE.md).
 - [x] Bind datalogger to oculus save/reject data buttons
 - [x] Debug VRPolicy action behavior while homing
 - [x] Debug frame twitching in visualization
-- [ ] Implement Diffusion Policy Controller
+- [x] Implement Diffusion Policy Controller
