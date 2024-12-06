@@ -80,7 +80,8 @@ class YuMiROSInterface(YuMiBaseInterface):
             rospy.Subscriber(
                 "yumi/rws/joint_states", 
                 JointState, 
-                self._joint_state_callback
+                self._joint_state_callback,
+                queue_size=1
             )
             rospy.Subscriber(
                 "yumi/egm/joint_states", 
@@ -230,8 +231,8 @@ class YuMiROSInterface(YuMiBaseInterface):
                 if len(data.velocity) == 0: # RWS joint states subscriber runs at ~5Hz
                     gripper_msg_L = self.get_io("hand_ActualPosition_L") 
                     gripper_msg_R = self.get_io("hand_ActualPosition_R")
-                    self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else 0
-                    self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else 0
+                    self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else self.gripper_L_pos
+                    self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else self.gripper_R_pos
                                     
                     # Update real robot joint configuration    
                     joints_real = self._map_rws_joints(data)
@@ -245,12 +246,12 @@ class YuMiROSInterface(YuMiBaseInterface):
                     else:
                         gripper_msg_L = self.get_io("hand_ActualPosition_L") 
                         gripper_msg_R = self.get_io("hand_ActualPosition_R")
-                        self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else 0
-                        self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else 0
+                        self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else self.gripper_L_pos
+                        self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else self.gripper_R_pos
                         return 0
                 assert type(self.gripper_L_pos) == int and type(self.gripper_R_pos) == int
                 
-                # Update real robot visualization
+                # Update real robot visualization                
                 self.urdf_vis_real.update_cfg(joints_real)
                 
                 # Update real robot transform frames
@@ -287,7 +288,7 @@ class YuMiROSInterface(YuMiBaseInterface):
                         self.tf_right_pub.publish(tf_msg)
                     
                     if self._first_js_callback:
-                        logger.info(f"Received first joint state update: {joints_real}")
+                        logger.info(f"Received first joint state update for arm {side}")
                         self.update_target_pose(
                             side=side,
                             position=onp.array(T_target_world.translation()),
