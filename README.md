@@ -7,6 +7,10 @@ Factor-graph-based inverse-kinematics optimization solver handled by the [jaxmp]
 Available control interfaces include:
 1. Interactive Viser Interface (Draggable End-Effector Frames)
 2. Meta Quest Oculus VR Tele-operation control
+3. [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)
+
+![DiffusionPolicy](data/media/DiffusionPolicyHandoffYuMi.gif)
+Diffusion Policy autonomously performing a handoff trained on 70 expert demonstrations
 
 ![VR_Control](data/media/YuMiTeleopVR.gif)
 Oculus VR Controllers Tele-operating the YuMi
