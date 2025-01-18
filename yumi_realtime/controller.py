@@ -558,7 +558,7 @@ class YuMiROSInterface(YuMiBaseInterface):
             self.stop_record = rospy.ServiceProxy("/yumi_controller/stop_recording", Empty)
 
 def main(
-    collect_data : bool = True,
+    collect_data : bool = False,
     task_name : str = 'example_task1'
     ): 
     

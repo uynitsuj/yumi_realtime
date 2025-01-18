@@ -12,7 +12,7 @@ class CameraPublisher:
         name: str='camera_0',
         image_height: int=480,
         image_width: int=848,
-        fps: int=15,
+        fps: int=10,
         init_node: bool=False
         ):
         
@@ -93,7 +93,7 @@ if __name__ == '__main__':
         rospy.init_node('multi_camera_publisher')
         
         # Create two camera publishers
-        camera0 = CameraPublisher(device_id=1, name='camera_0')
+        camera0 = CameraPublisher(device_id=0, name='camera_0')
         camera1 = CameraPublisher(device_id=4, name='camera_1')
         
         # Start both cameras

@@ -9,10 +9,13 @@ import jaxlie
 import numpy as onp
 import viser
 import viser.extras
+import os
 
 from jaxmp import JaxKinTree, RobotFactors
 from jaxmp.extras.urdf_loader import load_urdf
 from jaxmp.extras.solve_ik import solve_ik
+
+from pathlib import Path
 
 @dataclass
 class TransformHandle:
@@ -63,7 +66,8 @@ class YuMiBaseInterface:
         self.server = viser.ViserServer()
         
         # Load robot description
-        self.urdf = load_urdf("yumi", None)
+        # self.urdf = load_urdf("yumi", None)
+        self.urdf = load_urdf(None, Path(os.path.dirname(os.path.abspath(__file__)) + "/../data/yumi_description/urdf/yumi.urdf"))
         self.kin = JaxKinTree.from_urdf(self.urdf)
         self.rest_pose = jnp.array(list(self.YUMI_REST_POSE.values()))
         self.JointVar = RobotFactors.get_var_class(self.kin, self.rest_pose)
@@ -143,7 +147,7 @@ class YuMiBaseInterface:
             self.manipulability_cost_handle = self.server.gui.add_number(
                 "Yoshikawa index", 0.001, disabled=True
             )
-            
+        
         # Add DoF freezing controls
         self._setup_dof_controls()
         
@@ -250,7 +254,6 @@ class YuMiBaseInterface:
     def solve_ik(self):
         """Solve inverse kinematics for current targets."""
         # Get target poses from transform controls
-
 
         target_pose_list = [
             jaxlie.SE3(jnp.array([*tf_handle.control.wxyz, *tf_handle.control.position]))

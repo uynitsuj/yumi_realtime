@@ -10,7 +10,7 @@ Available control interfaces include:
 3. [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)
 
 ![DiffusionPolicy](data/media/DiffusionPolicyHandoffYuMi.gif)
-Diffusion Policy autonomously performing a handoff trained on 70 expert demonstrations
+Diffusion Policy autonomously performing a handoff trained from 70 expert demonstrations
 
 ![VR_Control](data/media/YuMiTeleopVR.gif)
 Oculus VR Controllers Tele-operating the YuMi

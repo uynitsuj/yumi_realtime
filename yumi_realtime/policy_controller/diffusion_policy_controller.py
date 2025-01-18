@@ -15,8 +15,13 @@ from scipy.spatial.transform import Rotation
 import PIL.Image as PILimage
 import torch
 import time
-
+import copy
 from line_profiler import LineProfiler
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import os
 
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
@@ -71,11 +76,13 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.cartesian_pose_R = None
         
         # Control mode
-        # self.control_mode = 'receding_horizon_control'
-        self.control_mode = 'temporal_ensemble'
+        self.control_mode = 'receding_horizon_control'
+        # self.control_mode = 'temporal_ensemble'
         
         if self.control_mode == 'receding_horizon_control':
-            self.action_queue = deque([],maxlen=self.model.model.action_horizon//2)
+            # self.max_len = self.model.model.action_horizon//2
+            self.max_len = 3
+            self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
             self.action_queue = deque([],maxlen=self.model.model.action_horizon)
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
@@ -84,8 +91,19 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         logger.info("Diffusion Policy controller initialized")
 
-        self.gripper_thres = 0.018
-    
+        self.gripper_thres = 0.020
+
+        with self.server.gui.add_folder("State"):
+            self.right_gripper_signal = self.server.gui.add_number("Right gripper pred. (mm): ", 0.0, disabled=True)
+            self.left_gripper_signal = self.server.gui.add_number("Left gripper pred. (mm): ", 0.0, disabled=True)
+        self.breakpoint_btn = self.server.gui.add_button("Breakpoint at Next Inference")
+        
+        self.breakpt_next_inference = False
+
+        @self.breakpoint_btn.on_click
+        def _(_) -> None:
+            self.breakpt_next_inference = True
+
     def camera_callback(self, image_msg: Image, camera_name: str):
         """Store messages from non-main cameras for synchronization"""
         camera_name = camera_name[0]
@@ -102,6 +120,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             logger.info(f"First image received from main camera; Observation dim: {self.height}x{self.width}x3")
         
         if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
+            logger.info("fail to read the cartesian pose")
             return
 
         target_time = image_msg.header.stamp.to_nsec()
@@ -182,10 +201,6 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # Stack along the N_C dimension
             stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
             
-            # CAMERA DEBUG
-            # import matplotlib.pyplot as plt
-            # plot_stacked_obs(stacked_obs)
-            # import pdb; pdb.set_trace()
             self._update_proprio_queue_viz()
             input = {
             "observation": torch.from_numpy(stacked_obs).unsqueeze(0),  # [B, T, N_C, C, H, W]
@@ -214,9 +229,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 print("lag: ", lag)
 
                 # if they are in disgreemnt, gripper control with last action 
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
+                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
                     print("blocking with last action")
+                    # import pdb; pdb.set_trace()
                     self._yumi_control(self.last_action, rate)
                     continue
 
@@ -228,11 +244,27 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     self._yumi_control(action, rate)
                     continue
             # end of receding horizon control
-            
+
+            # CAMERA DEBUG
+            # import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
+            # obs_copy = copy.deepcopy(stacked_obs)
+            # plot_stacked_obs(copy.deepcopy(obs_copy))
+            # import pdb; pdb.set_trace()
+
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
-            
+
+            if self.breakpt_next_inference:
+                from datetime import datetime
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                self.plot_predictions(input["proprio"], action_prediction, timestamp)
+                obs_copy = copy.deepcopy(stacked_obs)
+                self.plot_stacked_obs(copy.deepcopy(obs_copy), timestamp)
+                import pdb; pdb.set_trace()
+
             self.action_prediction = action_prediction
             self._update_action_queue_viz()
+            print("\nprediction called\n")
 
             action_L = action_prediction[0,:,:10]
             action_R = action_prediction[0,:,10:]
@@ -244,9 +276,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 # import pdb; pdb.set_trace()
                 new_actions = deque(action[:self.model.model.action_horizon])
                 self.action_queue.append(new_actions)
-                actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
+                if self.model.model.pred_left_only:
+                    actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
+                else:
+                    actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.07
+                k = 0.2
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
                     # self._update_action_queue_viz()
@@ -261,7 +296,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # receding horizon # check the receding horizon block as well
             if self.control_mode == 'receding_horizon_control':
                 if len(self.action_queue) == 0: 
-                    self.action_queue = deque([a for a in action])
+                    self.action_queue = deque([a for a in action[:self.max_len]])
                 action = self.action_queue.popleft()
             
             # update yumi action 
@@ -271,6 +306,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
     def _yumi_control(self, action, rate = None):
         # YuMi action update
         ######################################################################
+        print("action update called")
         self.last_action = action
         l_act = action_10d_to_8d(action[:10])
         r_act = action_10d_to_8d(action[10:])
@@ -278,7 +314,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
         print("left xyz: ", l_xyz)
         print("left gripper: ", l_gripper_cmd)
-        
+
+        self.left_gripper_signal.value = l_gripper_cmd * 1e3
+        self.right_gripper_signal.value = r_gripper_cmd * 1e3
+
         super().update_target_pose(
         side='left',
         position=l_xyz,
@@ -340,7 +379,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                                 self.cartesian_pose_L.transform.translation.y,
                                 self.cartesian_pose_L.transform.translation.z]]), 
             colors = onp.array([[1.0, 0.0, 0.0]]), 
-            point_size=0.005,
+            point_size=0.002,
             point_shape='circle'
             )
         self.action_queue_viz_R = self.server.scene.add_point_cloud(
@@ -349,7 +388,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                                 self.cartesian_pose_R.transform.translation.y,
                                 self.cartesian_pose_R.transform.translation.z]]), 
             colors = onp.array([[1.0, 0.0, 0.0]]), 
-            point_size=0.005,
+            point_size=0.002,
             point_shape='circle'
             )
         self.proprio_queue_viz_L = self.server.scene.add_point_cloud(
@@ -358,7 +397,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                                 self.cartesian_pose_L.transform.translation.y,
                                 self.cartesian_pose_L.transform.translation.z]]), 
             colors = onp.array([[1.0, 0.0, 1.0]]), 
-            point_size=0.007,
+            point_size=0.003,
             )
         self.proprio_queue_viz_R = self.server.scene.add_point_cloud(
             name = "proprio_queue_R", 
@@ -366,20 +405,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                                 self.cartesian_pose_R.transform.translation.y,
                                 self.cartesian_pose_R.transform.translation.z]]), 
             colors = onp.array([[1.0, 0.0, 1.0]]), 
-            point_size=0.007,
+            point_size=0.003,
             )
             
     def _update_action_queue_viz(self):
-        # import pdb; pdb.set_trace()
-        # if self.control_mode == 'receding_horizon_control':
-        #     action_queue_L = self.action_prediction[0,:,:3]
-        #     action_queue_R = self.action_prediction[0,:,10:13]
-        # elif self.control_mode == 'temporal_ensemble':
-        #     if getattr(self, 'temporal_ensemble_action', None) is None:
-        #         return
-        #     action_queue_L = self.temporal_ensemble_action[:3]
-        #     action_queue_R = self.temporal_ensemble_action[10:13]
-        
         action_queue_L = self.action_prediction[0,:,:3]
         action_queue_R = self.action_prediction[0,:,10:13]
         self.action_queue_viz_L.points = action_queue_L
@@ -404,43 +433,98 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         profiled_run()
         profiler.print_stats()
 
-def plot_stacked_obs(stacked_obs):
-    """
-    Plot stacked observations from multiple cameras across time steps.
-    
-    Args:
-        stacked_obs: numpy array of shape [T, N_C, C, H, W]
-        T: number of timesteps
-        N_C: number of cameras
-        C: channels (3 for RGB)
-        H, W: height and width
-    """
-    import matplotlib.pyplot as plt
-    T, N_C, C, H, W = stacked_obs.shape
-    
-    # Create a grid of subplots
-    fig, axes = plt.subplots(T, N_C, figsize=(4*N_C, 4*T))
-    if T == 1 and N_C == 1:
-        axes = np.array([[axes]])
-    elif T == 1:
-        axes = axes.reshape(1, -1)
-    elif N_C == 1:
-        axes = axes.reshape(-1, 1)
-    
-    # Plot each image
-    for t in range(T):
-        for nc in range(N_C):
-            # Transform from [C, H, W] to [H, W, C] for plotting
-            img = stacked_obs[t, nc].transpose(1, 2, 0)
-            
-            # Plot
-            axes[t, nc].imshow(img)
-            axes[t, nc].axis('off')
-            axes[t, nc].set_title(f'Time {t}, Camera {nc}')
-    
-    plt.tight_layout()
-    plt.show()
+    def plot_predictions(self, input_proprio, action_prediction, timestamp):
+        """
+        Plot proprio history and predicted actions with meaningful labels.
+        Args:
+            input_proprio: input proprio data [B, T, D]
+            action_prediction: predicted actions [B, H, D] where H is horizon
+        """
+        
+        labels = [
+        # Left arm (0-9)
+        'X_Left', 'Y_Left', 'Z_Left',
+        'Rot1_Left', 'Rot2_Left', 'Rot3_Left', 'Rot4_Left', 'Rot5_Left', 'Rot6_Left',
+        'Grip_Left',
+        # Right arm (10-19)
+        'X_Right', 'Y_Right', 'Z_Right',
+        'Rot1_Right', 'Rot2_Right', 'Rot3_Right', 'Rot4_Right', 'Rot5_Right', 'Rot6_Right',
+        'Grip_Right'
+        ]
+        T = input_proprio.shape[1]  # Length of proprio history
+        D = input_proprio.shape[2]  # Dimension of proprio/action
+        H = action_prediction.shape[1]  # Prediction horizon
                 
+        fig, axes = plt.subplots(5, 4, figsize=(20, 20))
+        plt.suptitle(f'Proprio History and Predictions - {timestamp}')
+        
+        for i in range(D):
+            ax = axes[i//4, i%4]
+            
+            # Plot proprio history
+            ax.plot(range(T), 
+                    input_proprio[0, :, i].numpy(), 
+                    label='proprio', 
+                    color='green')
+            
+            # Plot action predictions
+            ax.plot(range(T-1, T+H-1),
+                    action_prediction[0, :, i],
+                    label='pred', 
+                    color='red')
+            ax.set_title(labels[i])
+            ax.legend()
+            ax.grid(True) 
+        
+        plt.tight_layout()
+
+        os.makedirs(f'debug/{timestamp}', exist_ok=True)
+        save_path = f'debug/{timestamp}/prediction_plot.png'
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        print(f'Saved prediction plot to {save_path}')
+
+
+    def plot_stacked_obs(self, stacked_obs, timestamp):
+        """
+        Plot stacked observations from multiple cameras across time steps and save with timestamp.
+        Args:
+            stacked_obs: numpy array of shape [T, N_C, C, H, W]
+                T: number of timesteps
+                N_C: number of cameras
+                C: channels (3 for RGB)
+                H, W: height and width
+            base_path: base name for the saved file (without extension)
+        """
+        
+        save_path = f'debug/{timestamp}/stacked_obs.png'
+        os.makedirs(f'debug/{timestamp}', exist_ok=True)
+        
+        T, N_C, C, H, W = stacked_obs.shape
+        fig, axes = plt.subplots(T, N_C, figsize=(4*N_C, 4*T))
+        
+        if T == 1 and N_C == 1:
+            axes = onp.array([[axes]])
+        elif T == 1:
+            axes = axes.reshape(1, -1)
+        elif N_C == 1:
+            axes = axes.reshape(-1, 1)
+        
+        plt.suptitle(f'Observation Stack - {timestamp}', y=1.02)
+        
+        for t in range(T):
+            for nc in range(N_C):
+                img = stacked_obs[t, nc].transpose(1, 2, 0)
+                axes[t, nc].imshow(img)
+                axes[t, nc].axis('off')
+                axes[t, nc].set_title(f'Time {t}, Camera {nc}')
+        
+        plt.tight_layout()
+        plt.savefig(save_path, bbox_inches='tight') 
+        plt.close()
+        print(f'Saved plot to {save_path}')
+
+       
 def main(
     # some signal 
     # ckpt_path : str = "/home/xi/checkpoints/241203_2002", 
@@ -456,8 +540,30 @@ def main(
     # ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
     # ckpt_id : int = 599,
 
-    ckpt_path : str = "/home/xi/checkpoints/241205_1219",
-    ckpt_id : int = 299,
+    # ckpt_path : str = "/home/xi/checkpoints/241205_1219",
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/checkpoints/241205_1547",
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/241223_1409_athena5", 
+    # ckpt_id : int = 70,
+
+    # ckpt_path : str = "/home/xi/Documents/dp_gs/out_dir/241211_1403_athena5", 
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/checkpoints/241205_1609",
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/241230_2055_athena5",
+    # ckpt_id : int = 299,
+
+    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/250103_1706_sim_athena5",
+    # ckpt_id : int = 299,
+
+    ckpt_path: str = "/home/xi/checkpoints/250116_1948",
+    ckpt_id: int = 599,
+
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
