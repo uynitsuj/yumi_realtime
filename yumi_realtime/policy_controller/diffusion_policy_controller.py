@@ -54,7 +54,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.max_buffer_size = 5  # For storing recent messages to sync from
         self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
-            camera_name = f"camera_{idx}"
+            camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
                 # Main camera's synchronized buffer
                 self.observation_buffers[camera_name] = deque([], maxlen=self.model.model.obs_horizon)
