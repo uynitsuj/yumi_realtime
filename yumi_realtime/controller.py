@@ -258,7 +258,8 @@ class YuMiROSInterface(YuMiBaseInterface):
                 joints_array = jnp.array(list(joints_real.values()), dtype=jnp.float32)
                 fk_frames = self.kin.forward_kinematics(joints_array)
                 
-                for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+                for side, joint_name in [('left', 'left_dummy_joint'), ('right', 'right_dummy_joint')]:
+                # for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
                     joint_idx = self.kin.joint_names.index(joint_name)
                     T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
                     

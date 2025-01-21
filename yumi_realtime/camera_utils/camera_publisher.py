@@ -23,10 +23,8 @@ class CameraPublisher:
         self.running = False
         self.thread = None
         
-        # Initialize the CvBridge class
         self.bridge = CvBridge()
         
-        # Initialize the camera
         self.cap = cv2.VideoCapture(device_id)
         if not self.cap.isOpened():
             rospy.logerr("Failed to open camera!")
@@ -45,7 +43,6 @@ class CameraPublisher:
         # Create publishers
         self.image_pub = rospy.Publisher(f'/camera/{self.name}/image_raw', Image, queue_size=10)
         
-        # Set up the publishing rate
         self.rate = rospy.Rate(self.fps)
         
         rospy.loginfo(f"Started camera publisher {self.name} - Resolution: {self.width}x{self.height}, FPS: {self.fps}")
@@ -92,15 +89,13 @@ if __name__ == '__main__':
     try:
         rospy.init_node('multi_camera_publisher')
         
-        # Create two camera publishers
+        # Creates two camera publishers
         camera0 = CameraPublisher(device_id=0, name='camera_0')
         camera1 = CameraPublisher(device_id=4, name='camera_1')
         
-        # Start both cameras
         camera0.start()
         camera1.start()
         
-        # Keep the main thread alive
         rospy.spin()
         
     except rospy.ROSInterruptException:

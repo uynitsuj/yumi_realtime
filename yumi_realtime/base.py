@@ -79,7 +79,8 @@ class YuMiBaseInterface:
         self.limit_weight = limit_weight
         
         # Target transform handle names HARDCODED BAD
-        self.target_names = ["yumi_joint_6_l", "yumi_joint_6_r"]
+        # self.target_names = ["yumi_joint_6_l", "yumi_joint_6_r"]
+        self.target_names = ["left_dummy_joint", "right_dummy_joint"]
         
         self.joints = self.rest_pose
         
@@ -101,7 +102,6 @@ class YuMiBaseInterface:
             self.smooth = True
             self.manipulability_weight = 0.0
             self.has_jitted = False
-            
             
             self.base_mask, self.target_mask = self.get_freeze_masks()
             self.ConstrainedSE3Var = RobotFactors.get_constrained_se3(self.base_mask)

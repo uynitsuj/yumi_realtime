@@ -52,7 +52,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_0"
+        self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{idx}"
             if camera_name == self.main_camera:
@@ -61,13 +61,15 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             else:
                 # Other cameras' message buffers for synchronization
                 self.camera_buffers[camera_name] = deque([], maxlen=self.max_buffer_size)
-            
+        main_topic = [topic for topic in self.camera_topics if self.main_camera in topic]
+        other_topics = [topic for topic in self.camera_topics if self.main_camera not in topic]
+        assert len(main_topic) == 1, "There appears to be duplicately named ros topics containing main_camera keyword \"{self.main_camera}\""
         # Subscribe main camera separately since it drives synchronization
-        rospy.Subscriber(self.camera_topics[0], Image, self.main_camera_callback)
+        rospy.Subscriber(main_topic[0], Image, self.main_camera_callback)
         
         # Subscribe other cameras
-        for idx, topic in enumerate(self.camera_topics[1:], start=1):
-            camera_name = f"camera_{idx}"
+        for topic in other_topics:
+            camera_name = f"camera_{topic.split('camera_')[1][0]}"
             rospy.Subscriber(topic, Image, self.camera_callback, callback_args=(camera_name,))
         
         self.cur_proprio = None
@@ -76,12 +78,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.cartesian_pose_R = None
         
         # Control mode
-        self.control_mode = 'receding_horizon_control'
-        # self.control_mode = 'temporal_ensemble'
+        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'temporal_ensemble'
         
         if self.control_mode == 'receding_horizon_control':
             # self.max_len = self.model.model.action_horizon//2
-            self.max_len = 3
+            self.max_len = 10
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
             self.action_queue = deque([],maxlen=self.model.model.action_horizon)
@@ -91,11 +93,20 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         logger.info("Diffusion Policy controller initialized")
 
-        self.gripper_thres = 0.020
+        self.gripper_thres = 0.5
+
+        self.viser_img_handles = {}
+
+        with self.server.gui.add_folder("Observation"):
+            for camera_name in self.camera_topics:
+                self.viser_img_handles[camera_name] = self.server.gui.add_image(
+                    image = onp.zeros((480, 848, 3)),
+                    label = camera_name
+                )
 
         with self.server.gui.add_folder("State"):
-            self.right_gripper_signal = self.server.gui.add_number("Right gripper pred. (mm): ", 0.0, disabled=True)
-            self.left_gripper_signal = self.server.gui.add_number("Left gripper pred. (mm): ", 0.0, disabled=True)
+            self.right_gripper_signal = self.server.gui.add_number("Right gripper pred.: ", 0.0, disabled=True)
+            self.left_gripper_signal = self.server.gui.add_number("Left gripper pred.: ", 0.0, disabled=True)
         self.breakpoint_btn = self.server.gui.add_button("Breakpoint at Next Inference")
         
         self.breakpt_next_inference = False
@@ -161,7 +172,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     self.observation_buffers[camera_name] = deque([obs] * (self.model.model.obs_horizon - 1), 
                                                         maxlen=self.model.model.obs_horizon)
                 self.observation_buffers[camera_name].append(obs)
-        
+
     def run(self):
         """Diffusion Policy controller loop."""
         rate = rospy.Rate(50) # 150Hz control loop
@@ -169,7 +180,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.home()
         i = 0
         start = time.time()
-        while ((self.height is None or self.width is None) or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) or time.time() - start < 5):
+        while ((self.height is None or self.width is None) 
+               or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) 
+               or time.time() - start < 7
+               or len(self.proprio_buffer) != self.model.model.obs_horizon):
             self.home()
             if rate is not None:
                 rate.sleep()
@@ -177,7 +191,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             self.update_visualization()
             
             super().publish_joint_commands()
-            if i % 750 == 0:
+            if i % 400 == 0:
                 self.call_gripper(side = 'left', gripper_state = False, enable = True)
                 rospy.sleep(0.2)
                 self.call_gripper(side = 'right', gripper_state = False, enable = True)
@@ -186,14 +200,16 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             i += 1
         
         rospy.sleep(1.5)
+        if not rospy.is_shutdown():
+            print("Press C to continue once finished homing")
+            import pdb; pdb.set_trace()
         step = 0
-        # output_dir = "/home/xi/yumi_realtime/debugging_output"
         self.last_action = None
         while not rospy.is_shutdown():
             assert len(self.proprio_buffer) == self.model.model.obs_horizon
             # Stack all camera observations
             all_camera_obs = []
-            for camera_name in sorted(self.observation_buffers.keys()):  # Sort to ensure consistent order
+            for camera_name in self.observation_buffers.keys():
                 assert len(self.observation_buffers[camera_name]) == self.model.model.obs_horizon
                 cam_obs = onp.array(self.observation_buffers[camera_name])
                 all_camera_obs.append(cam_obs)
@@ -201,11 +217,18 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # Stack along the N_C dimension
             stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
             
+            _img_0 = (stacked_obs[-1][0].transpose([1,2,0])*255).astype(onp.uint8)
+            _img_1 = (stacked_obs[-1][1].transpose([1,2,0])*255).astype(onp.uint8)
+            list(self.viser_img_handles.items())[0][1].image = _img_0
+            list(self.viser_img_handles.items())[1][1].image = _img_1
+            
             self._update_proprio_queue_viz()
+            print("inputs")
             input = {
             "observation": torch.from_numpy(stacked_obs).unsqueeze(0),  # [B, T, N_C, C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
                 }
+            print("inputs updated")
             
             start = time.time()
             step += 1
@@ -230,9 +253,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
                 # if they are in disgreemnt, gripper control with last action 
                 # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.005:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.010:
                     print("blocking with last action")
-                    # import pdb; pdb.set_trace()
                     self._yumi_control(self.last_action, rate)
                     continue
 
@@ -245,15 +267,13 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     continue
             # end of receding horizon control
 
-            # CAMERA DEBUG
-            # import pdb; pdb.set_trace()
-            # import pdb; pdb.set_trace()
-            # obs_copy = copy.deepcopy(stacked_obs)
-            # plot_stacked_obs(copy.deepcopy(obs_copy))
-            # import pdb; pdb.set_trace()
-
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
+            # # import pdb; pdb.set_trace()
+            # # Z-offset trick (cuz bad data)
+            # action_prediction[:,:,2] += 0.1
+            # action_prediction[:,:,12] += 0.1
 
+            print("\nprediction called\n")
             if self.breakpt_next_inference:
                 from datetime import datetime
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -264,7 +284,6 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
             self.action_prediction = action_prediction
             self._update_action_queue_viz()
-            print("\nprediction called\n")
 
             action_L = action_prediction[0,:,:10]
             action_R = action_prediction[0,:,10:]
@@ -312,6 +331,11 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         r_act = action_10d_to_8d(action[10:])
         l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
         r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
+
+        if l_xyz[2] < 0.005:
+            import pdb; pdb.set_trace()
+        if r_xyz[2] < 0.005:
+            import pdb; pdb.set_trace()
         print("left xyz: ", l_xyz)
         print("left gripper: ", l_gripper_cmd)
 
@@ -322,7 +346,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         side='left',
         position=l_xyz,
         wxyz=l_wxyz,
-        gripper_state=bool(l_gripper_cmd<self.gripper_thres), 
+        gripper_state=bool(l_gripper_cmd>self.gripper_thres), 
         enable=True
         )
         
@@ -330,8 +354,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         side='right',
         position=r_xyz,
         wxyz=r_wxyz,
-        gripper_state=bool(r_gripper_cmd<self.gripper_thres), 
-        enable=True
+        gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
+        enable=False
         )
         ######################################################################
         
@@ -353,7 +377,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         r_rot = r_q.as_matrix()
         r_rot_6d = onp.squeeze(rot_mat_to_rot_6d(r_rot[None]), axis=0) # [N, 6]
         
-        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([int(self.gripper_L_pos)/10000]), r_xyz, r_rot_6d, onp.array([int(self.gripper_R_pos)/10000])], axis=-1, dtype=onp.float32)
+        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([int(self.gripper_L_pos < 200)]), r_xyz, r_rot_6d, onp.array([int(self.gripper_R_pos) < 200])], axis=-1, dtype=onp.float32)
         assert self.cur_proprio.shape == (20,)
 
         self.proprio_buffer.append(self.cur_proprio)
@@ -561,8 +585,8 @@ def main(
     # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/250103_1706_sim_athena5",
     # ckpt_id : int = 299,
 
-    ckpt_path: str = "/home/xi/checkpoints/250116_1948",
-    ckpt_id: int = 599,
+    ckpt_path: str = "/home/xi/checkpoints/250120_1346",
+    ckpt_id: int = 185,
 
     ): 
     
