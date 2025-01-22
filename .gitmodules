@@ -19,7 +19,7 @@
 	branch = 2d1035c
 [submodule "dependencies/jaxmp"]
 	path = dependencies/jaxmp
-	url = https://github.com/uynitsuj/jaxmp
+	url = https://github.com/uynitsuj/jaxmp.git
 [submodule "dependencies/oculus_reader"]
 	path = dependencies/oculus_reader
 	url = https://github.com/rail-berkeley/oculus_reader.git
