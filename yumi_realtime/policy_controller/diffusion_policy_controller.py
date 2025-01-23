@@ -248,12 +248,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 current_proprio_left = input["proprio"][0, -1, :3].numpy()
             
                 # calculate lag 
-                lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
-                print("lag: ", lag)
+                xyz_lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
+                print("lag: ", xyz_lag)
 
                 # if they are in disgreemnt, gripper control with last action 
-                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.010:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
+                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.010:
                     print("blocking with last action")
                     self._yumi_control(self.last_action, rate)
                     continue
@@ -300,7 +300,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.2
+                k = 0.03
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
                     # self._update_action_queue_viz()
@@ -333,9 +333,11 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
 
         if l_xyz[2] < 0.005:
-            import pdb; pdb.set_trace()
+            l_xyz[2] = 0.006
+            # import pdb; pdb.set_trace()
         if r_xyz[2] < 0.005:
-            import pdb; pdb.set_trace()
+            r_xyz[2] = 0.006
+            # import pdb; pdb.set_trace()
         print("left xyz: ", l_xyz)
         print("left gripper: ", l_gripper_cmd)
 
@@ -585,8 +587,8 @@ def main(
     # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/250103_1706_sim_athena5",
     # ckpt_id : int = 299,
 
-    ckpt_path: str = "/home/xi/checkpoints/250120_1346",
-    ckpt_id: int = 185,
+    ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger/250122_1721",
+    ckpt_id: int = 340,
 
     ): 
     
