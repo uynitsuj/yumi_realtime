@@ -15,3 +15,6 @@ debugging_output/*
 /dependencies/oculus_reader/oculus_reader/APK/teleop-debug.apk
 data/yumi_new/yumi_fix.usd
 debug/
+*.npy
+*.h5
+*.png
