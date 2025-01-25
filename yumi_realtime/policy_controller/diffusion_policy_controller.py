@@ -52,7 +52,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_1"
+        self.main_camera = "camera_0"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -357,7 +357,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         position=r_xyz,
         wxyz=r_wxyz,
         gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
-        enable=False
+        enable=True
         )
         ######################################################################
         
@@ -587,8 +587,11 @@ def main(
     # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/250103_1706_sim_athena5",
     # ckpt_id : int = 299,
 
-    ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger/250122_1721",
-    ckpt_id: int = 340,
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger/250122_1721", # works!
+    # ckpt_id: int = 340,
+
+    ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250123_2225", # first bimanual
+    ckpt_id: int = 490,
 
     ): 
     
