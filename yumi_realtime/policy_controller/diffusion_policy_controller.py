@@ -17,6 +17,8 @@ import torch
 import time
 import copy
 from line_profiler import LineProfiler
+from yumi_realtime.data_logging.data_collector import DataCollector
+from std_srvs.srv import Empty, EmptyResponse
 
 import matplotlib
 matplotlib.use('Agg')
@@ -26,7 +28,7 @@ import os
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
     
-    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, *args, **kwargs):
+    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, collect_data: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
@@ -38,7 +40,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Setup Diffusion Policy module and weights
         self.model = DiffusionWrapper(model_ckpt_folder=ckpt_path, ckpt_id=ckpt_id, device='cuda')
-        
+        self.collect_data = collect_data
+
         # ROS Camera Observation Subscriber
         self.bridge = CvBridge()
         self.height = None
@@ -52,7 +55,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_0"
+        self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -63,7 +66,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 self.camera_buffers[camera_name] = deque([], maxlen=self.max_buffer_size)
         main_topic = [topic for topic in self.camera_topics if self.main_camera in topic]
         other_topics = [topic for topic in self.camera_topics if self.main_camera not in topic]
-        assert len(main_topic) == 1, "There appears to be duplicately named ros topics containing main_camera keyword \"{self.main_camera}\""
+        assert len(main_topic) == 1, f"There appears to be duplicately named ros topics containing main_camera keyword \"{self.main_camera}\""
         # Subscribe main camera separately since it drives synchronization
         rospy.Subscriber(main_topic[0], Image, self.main_camera_callback)
         
@@ -78,12 +81,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.cartesian_pose_R = None
         
         # Control mode
-        # self.control_mode = 'receding_horizon_control'
-        self.control_mode = 'temporal_ensemble'
+        self.control_mode = 'receding_horizon_control'
+        # self.control_mode = 'temporal_ensemble'
         
         if self.control_mode == 'receding_horizon_control':
             # self.max_len = self.model.model.action_horizon//2
-            self.max_len = 10
+            self.max_len = 9
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
             self.action_queue = deque([],maxlen=self.model.model.action_horizon)
@@ -92,6 +95,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self._setup_scene()
         
         logger.info("Diffusion Policy controller initialized")
+
+        if self.collect_data:
+            self._setup_collectors()
+            self.add_gui_data_collection_controls()
 
         self.gripper_thres = 0.5
 
@@ -203,6 +210,11 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         if not rospy.is_shutdown():
             print("Press C to continue once finished homing")
             import pdb; pdb.set_trace()
+            if self.collect_data:
+                self.start_record()
+                self.start_record_button.disabled = True
+                self.save_success_button.disabled = False
+                self.save_failure_button.disabled = False
         step = 0
         self.last_action = None
         while not rospy.is_shutdown():
@@ -225,7 +237,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             self._update_proprio_queue_viz()
             print("inputs")
             input = {
-            "observation": torch.from_numpy(stacked_obs).unsqueeze(0),  # [B, T, N_C, C, H, W]
+            "observation": torch.flip(torch.from_numpy(stacked_obs).unsqueeze(0), [1]),  # [B, T, N_C, C, H, W]
             "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
                 }
             print("inputs updated")
@@ -252,8 +264,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 print("lag: ", xyz_lag)
 
                 # if they are in disgreemnt, gripper control with last action 
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.010:
+                # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0050:
                     print("blocking with last action")
                     self._yumi_control(self.last_action, rate)
                     continue
@@ -295,7 +307,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 # import pdb; pdb.set_trace()
                 new_actions = deque(action[:self.model.model.action_horizon])
                 self.action_queue.append(new_actions)
-                if self.model.model.pred_left_only:
+                if self.model.model.pred_left_only or self.model.model.pred_right_only:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
@@ -550,6 +562,41 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         plt.close()
         print(f'Saved plot to {save_path}')
 
+    def add_gui_data_collection_controls(self):
+        with self.server.gui.add_folder("Data Collection Controls"):
+            self.start_record_button = self.server.gui.add_button("Start Recording")
+            self.save_success_button = self.server.gui.add_button("Save Success", disabled=True)
+            self.save_failure_button = self.server.gui.add_button("Save Failure", disabled=True)
+            
+        @self.start_record_button.on_click
+        def _(_) -> None:
+            """Callback for start recording."""
+            self.start_record()
+            self.start_record_button.disabled = True
+            self.save_success_button.disabled = False
+            self.save_failure_button.disabled = False
+        @self.save_success_button.on_click
+        def _(_) -> None:
+            """Callback for save success."""
+            self.save_success()
+            self.start_record_button.disabled = False
+            self.save_success_button.disabled = True
+            self.save_failure_button.disabled = True
+        @self.save_failure_button.on_click
+        def _(_) -> None:
+            """Callback for save failure."""
+            self.save_failure()
+            self.start_record_button.disabled = False
+            self.save_success_button.disabled = True
+            self.save_failure_button.disabled = True
+    
+    def _setup_collectors(self):
+        if self.collect_data:
+            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
+            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
+            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
+            self.stop_record = rospy.ServiceProxy("/yumi_controller/stop_recording", Empty)
+
        
 def main(
     # some signal 
@@ -590,12 +637,28 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger/250122_1721", # works!
     # ckpt_id: int = 340,
 
-    ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250123_2225", # first bimanual
-    ckpt_id: int = 490,
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250123_2225", # first bimanual
+    # ckpt_id: int = 490,
 
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250124_1935",
+    # ckpt_id: int = 400,
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250311_2134", # first datagen working, coffee maker no aug
+    # ckpt_id: int = 15,
+
+    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250314_2126", 
+    ckpt_id: int = 275,
+
+    collect_data: bool = False,
+    task_name : str = 'move white mug onto black coffee machine'
     ): 
     
-    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id)
+    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)
+
+    if collect_data:
+        logger.info("Start data collection service")
+        data_collector = DataCollector(init_node=False, task_name=task_name)
+
     yumi_interface.run()
     # yumi_interface.profile_run()
     
