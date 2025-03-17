@@ -20,14 +20,14 @@ class YuMiRExtrinsics(YuMiBaseInterface):
             name="/chessboard",
             axes_length=0.1,
             axes_radius=0.005,
-            position=onp.array([0.537, 0, 0]),
-            wxyz=onp.array([0, 0, 0, 1]),
+            position=onp.array([0.537, 0, 0.005]),
+            wxyz=onp.array([1, 0, 0, 0]),
         )
-        left_camera2cb = onp.linalg.inv(onp.load("left_camera_transform.npy"))
-        right_camera2cb = onp.linalg.inv(onp.load("right_camera_transform.npy"))
+        left_camera2cb = onp.linalg.inv(onp.load("top_camera_transform.npy"))
+        right_camera2cb = onp.linalg.inv(onp.load("ego_camera_transform.npy"))
 
         self.left_camera_frame = self.server.scene.add_frame(
-            name="/chessboard/left_camera",
+            name="/chessboard/top_camera",
             axes_length=0.1,
             axes_radius=0.005,
             position=left_camera2cb[:3, 3],
@@ -35,7 +35,7 @@ class YuMiRExtrinsics(YuMiBaseInterface):
         )
         
         self.right_camera_frame = self.server.scene.add_frame(
-            name="/chessboard/right_camera",
+            name="/chessboard/ego_camera",
             axes_length=0.1,
             axes_radius=0.005,
             position=right_camera2cb[:3, 3],

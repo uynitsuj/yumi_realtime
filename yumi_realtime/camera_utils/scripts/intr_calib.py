@@ -7,7 +7,7 @@ CHECKERBOARD = (6, 8)
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
 class CameraCalibrator:
-    def __init__(self, device_id=0, width=1920, height=1080, fps=2, square_size_m=.233/9):
+    def __init__(self, device_id=0, width=960, height=540, fps=2, square_size_m=.233/9):
         # Initialize camera
         self.cap = cv2.VideoCapture(device_id)
         if not self.cap.isOpened():
@@ -202,7 +202,7 @@ class CameraCalibrator:
 
 if __name__ == '__main__':
     try:
-        calibrator = CameraCalibrator(device_id=0, fps=15)  # 2 FPS for stable processing
+        calibrator = CameraCalibrator(device_id=0, fps=3)  # 2 FPS for stable processing
         calibrator.run()
     except Exception as e:
         print(f"Error: {str(e)}")

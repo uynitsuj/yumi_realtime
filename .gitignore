@@ -18,3 +18,4 @@ debug/
 *.npy
 *.h5
 *.png
+*.pyc

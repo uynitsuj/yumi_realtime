@@ -28,7 +28,7 @@ import os
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
     
-    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, collect_data: bool = False, *args, **kwargs):
+    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, collect_data: bool = False, debug_mode = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
@@ -55,7 +55,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_1"
+        self.main_camera = "camera_0"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -86,7 +86,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         if self.control_mode == 'receding_horizon_control':
             # self.max_len = self.model.model.action_horizon//2
-            self.max_len = 9
+            self.max_len = 14
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
             self.action_queue = deque([],maxlen=self.model.model.action_horizon)
@@ -104,12 +104,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         self.viser_img_handles = {}
 
-        with self.server.gui.add_folder("Observation"):
-            for camera_name in self.camera_topics:
-                self.viser_img_handles[camera_name] = self.server.gui.add_image(
-                    image = onp.zeros((480, 848, 3)),
-                    label = camera_name
-                )
+        self.debug_mode = debug_mode
+        if self.debug_mode:
+            with self.server.gui.add_folder("Observation"):
+                for camera_name in self.camera_topics:
+                    self.viser_img_handles[camera_name] = self.server.gui.add_image(
+                        image = onp.zeros((480, 848, 3)),
+                        label = camera_name
+                    )
 
         with self.server.gui.add_folder("State"):
             self.right_gripper_signal = self.server.gui.add_number("Right gripper pred.: ", 0.0, disabled=True)
@@ -215,32 +217,35 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 self.start_record_button.disabled = True
                 self.save_success_button.disabled = False
                 self.save_failure_button.disabled = False
+
+        # Prealloc diffusion input tensors
+        camera_count = len(self.observation_buffers.keys())
+        self.input_obs_tensor = torch.empty(
+            (1, self.model.model.obs_horizon, camera_count, 3, self.height, self.width),
+            dtype=torch.float32,
+            device='cpu'
+        )
+
+        action_dim = len(self.proprio_buffer[0])
+        self.input_proprio_tensor = torch.empty(
+            (1, self.model.model.obs_horizon, action_dim),  # Assuming 20 is the proprio dimension
+            dtype=torch.float32,
+            device='cpu'
+        )
+
         step = 0
         self.last_action = None
         while not rospy.is_shutdown():
             assert len(self.proprio_buffer) == self.model.model.obs_horizon
             # Stack all camera observations
-            all_camera_obs = []
-            for camera_name in self.observation_buffers.keys():
-                assert len(self.observation_buffers[camera_name]) == self.model.model.obs_horizon
-                cam_obs = onp.array(self.observation_buffers[camera_name])
-                all_camera_obs.append(cam_obs)
             
-            # Stack along the N_C dimension
-            stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
-            
-            _img_0 = (stacked_obs[-1][0].transpose([1,2,0])*255).astype(onp.uint8)
-            _img_1 = (stacked_obs[-1][1].transpose([1,2,0])*255).astype(onp.uint8)
-            list(self.viser_img_handles.items())[0][1].image = _img_0
-            list(self.viser_img_handles.items())[1][1].image = _img_1
+            if self.debug_mode:
+                _img_0 = (stacked_obs[-1][0].transpose([1,2,0])*255).astype(onp.uint8)
+                _img_1 = (stacked_obs[-1][1].transpose([1,2,0])*255).astype(onp.uint8)
+                list(self.viser_img_handles.items())[0][1].image = _img_0
+                list(self.viser_img_handles.items())[1][1].image = _img_1
             
             self._update_proprio_queue_viz()
-            print("inputs")
-            input = {
-            "observation": torch.flip(torch.from_numpy(stacked_obs).unsqueeze(0), [1]),  # [B, T, N_C, C, H, W]
-            "proprio": torch.from_numpy(onp.array(self.proprio_buffer)).unsqueeze(0) # [B, T, D] 
-                }
-            print("inputs updated")
             
             start = time.time()
             step += 1
@@ -265,9 +270,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
                 # if they are in disgreemnt, gripper control with last action 
                 # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0050:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0020:
                     print("blocking with last action")
                     self._yumi_control(self.last_action, rate)
+                    self.last_action = None
                     continue
 
             # receding horizon control
@@ -279,13 +285,31 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     continue
             # end of receding horizon control
 
+            all_camera_obs = []
+            for camera_name in self.observation_buffers.keys():
+                assert len(self.observation_buffers[camera_name]) == self.model.model.obs_horizon
+                cam_obs = onp.array(self.observation_buffers[camera_name])
+                all_camera_obs.append(cam_obs)
+            
+            # Stack along the N_C dimension
+            stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
+            self.input_obs_tensor.copy_(torch.from_numpy(stacked_obs).unsqueeze(0))
+            
+            proprio_array = onp.asarray(self.proprio_buffer)
+            self.input_proprio_tensor.copy_(torch.flip(torch.from_numpy(proprio_array).unsqueeze(0), [1]))
+            # self.input_proprio_tensor.copy_(torch.from_numpy(proprio_array).unsqueeze(0))
+
+            # Create input dict referencing pre-allocated tensors
+            input = {
+                "observation": self.input_obs_tensor,
+                "proprio": self.input_proprio_tensor
+            }
+
+            inference_start = time.time()
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
-            # # import pdb; pdb.set_trace()
-            # # Z-offset trick (cuz bad data)
-            # action_prediction[:,:,2] += 0.1
-            # action_prediction[:,:,12] += 0.1
 
             print("\nprediction called\n")
+            print("Inference time: ", time.time() - inference_start)
             if self.breakpt_next_inference:
                 from datetime import datetime
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -326,6 +350,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 
             # receding horizon # check the receding horizon block as well
             if self.control_mode == 'receding_horizon_control':
+                if len(self.action_queue) == self.max_len: # If at max, discard a few due to latency
+                    self.action_queue.popleft()
+                    self.action_queue.popleft()
+                    self.action_queue.popleft()
+                    self.action_queue.popleft()
+                    self.action_queue.popleft()
                 if len(self.action_queue) == 0: 
                     self.action_queue = deque([a for a in action[:self.max_len]])
                 action = self.action_queue.popleft()
@@ -501,7 +531,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             # Plot proprio history
             ax.plot(range(T), 
-                    input_proprio[0, :, i].numpy(), 
+                    onp.flip(input_proprio[0, :, i].numpy(), 0), 
                     label='proprio', 
                     color='green')
             
@@ -646,8 +676,14 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250311_2134", # first datagen working, coffee maker no aug
     # ckpt_id: int = 15,
 
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250314_2126", 
-    ckpt_id: int = 275,
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250314_2126", 
+    # ckpt_id: int = 100, #some signal on trajinterp
+
+    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2247/", 
+    ckpt_id: int = 130, # more signal on trajinterp
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2248_1hist/", 
+    # ckpt_id: int = 275,
 
     collect_data: bool = False,
     task_name : str = 'move white mug onto black coffee machine'

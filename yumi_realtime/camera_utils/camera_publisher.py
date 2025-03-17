@@ -4,16 +4,26 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo
 import threading
+import numpy as np
+
+
+mtx = np.array([[560.90882899, 0.00000000e+00, 480.40633792],
+    [0.00000000e+00, 560.06010885,  282.13156697],
+    [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+
+dist = np.array([[ 1.70924280e-01, -4.38151458e-01,  7.68883870e-04, -2.26292369e-05,  2.65475944e-01]])
+
 
 class CameraPublisher:
     def __init__(
         self, 
         device_id: int=0,
         name: str='camera_0',
-        image_height: int=480,
-        image_width: int=848,
-        fps: int=10,
-        init_node: bool=False
+        image_height: int=270*2,
+        image_width: int=480*2,
+        fps: int=12,
+        init_node: bool=False,
+        undistort: bool=True
         ):
         
         if init_node:
@@ -22,6 +32,7 @@ class CameraPublisher:
         self.name = name
         self.running = False
         self.thread = None
+        self.undistort = undistort
         
         self.bridge = CvBridge()
         
@@ -40,18 +51,29 @@ class CameraPublisher:
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
+        newcameramtx, self.roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (self.width,self.height), 1, (self.width,self.height))
+        self.mapx, self.mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (self.width,self.height), 5)
         # Create publishers
         self.image_pub = rospy.Publisher(f'/camera/{self.name}/image_raw', Image, queue_size=10)
         
         self.rate = rospy.Rate(self.fps)
         
         rospy.loginfo(f"Started camera publisher {self.name} - Resolution: {self.width}x{self.height}, FPS: {self.fps}")
+        rospy.loginfo(f"Camera {self.name} initialized with undistort True, roi: {self.roi}")
+        rospy.loginfo(f"New Camera Matrix: {newcameramtx}")
 
     def _run(self):
         """Internal run method that runs in the thread"""
         while not rospy.is_shutdown() and self.running:
             ret, frame = self.cap.read()
-            
+
+            if self.undistort:
+                dst = cv2.remap(frame, self.mapx, self.mapy, cv2.INTER_CUBIC)
+    
+                x, y, w, h = self.roi
+                dst = dst[y:y+h, x:x+w]
+
+                frame = dst
             if ret:
                 try:
                     ros_image = self.bridge.cv2_to_imgmsg(frame, "bgr8")
@@ -90,8 +112,8 @@ if __name__ == '__main__':
         rospy.init_node('multi_camera_publisher')
         
         # Creates two camera publishers
-        camera0 = CameraPublisher(device_id=0, name='camera_0')
-        camera1 = CameraPublisher(device_id=4, name='camera_1')
+        camera0 = CameraPublisher(device_id=0, name='camera_1')
+        camera1 = CameraPublisher(device_id=4, name='camera_0')
         
         camera0.start()
         camera1.start()

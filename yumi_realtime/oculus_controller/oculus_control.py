@@ -35,7 +35,7 @@ class YuMiOculusInterface(YuMiROSInterface):
         self.collect_data = collect_data
         self.begin_record = False
         self._saving_data = False
-        self._homing = True
+        self._homing = False
         self.joint_noise = 0.05
         self.noise_home_noise = None
                     
@@ -155,7 +155,7 @@ class YuMiOculusInterface(YuMiROSInterface):
 
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
-    collect_data : bool = True
+    collect_data : bool = False
     ): 
     
     yumi_interface = YuMiOculusInterface(collect_data=collect_data)
@@ -171,6 +171,7 @@ def main(
         logger.info("Start data collection service")
         data_collector = DataCollector(init_node=False, task_name='pickup_tiger_241226')
         yumi_interface._setup_collectors()
+    print("Run")
     yumi_interface.run()
     
     

@@ -568,8 +568,7 @@ def main(
     if collect_data:
         logger.info("Start data collection service")
         data_collector = DataCollector(init_node=False, task_name=task_name)
-        # yumi_interface._setup_collectors()
-        # yumi_interface.add_gui_data_collection_controls()
+
     yumi_interface.run()
     
     

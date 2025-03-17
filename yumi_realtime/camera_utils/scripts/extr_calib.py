@@ -4,7 +4,7 @@ import time
 from scipy.spatial.transform import Rotation
 
 class ArucoExtrinsicsCalibrator:
-    def __init__(self, device_id=0, width=1920, height=1080, fps=15, 
+    def __init__(self, device_id=0, width=960, height=540, fps=15, 
                  aruco_dict_type=cv2.aruco.DICT_6X6_250,
                  marker_size_m=0.05, output_file="transforms.npy"):
         self.cap = cv2.VideoCapture(device_id)
@@ -148,17 +148,17 @@ if __name__ == '__main__':
     # [  0.,           0.,           1.        ]])
     # dist_coeffs = np.array([[ 6.49342319e-02, -4.03104967e-01, -1.89174280e-02,  2.86095171e-04,   1.29272219e+00]])
     
-    camera_matrix = np.array([[1.11051899e+03, 0.00000000e+00, 9.76018042e+02],
-    [0.00000000e+00, 1.11032898e+03, 5.33269878e+02],
+    camera_matrix = np.array([[560.90882899, 0.00000000e+00, 480.40633792],
+    [0.00000000e+00, 560.06010885,  282.13156697],
     [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
     dist_coeffs = np.array([[ 0.16449587, -0.36449848, -0.00538376, 0.00240608, -0.09279666]])
 
     try:
         calibrator = ArucoExtrinsicsCalibrator(
-            device_id=0,
+            device_id=4,
             marker_size_m=0.1552,  # 15.52cm marker
-            output_file="left_camera_transform.npy"
+            output_file="top_camera_transform.npy"
         )
         calibrator.run(camera_matrix, dist_coeffs)
     except Exception as e:
