@@ -81,15 +81,16 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.cartesian_pose_R = None
         
         # Control mode
-        self.control_mode = 'receding_horizon_control'
-        # self.control_mode = 'temporal_ensemble'
+        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'temporal_ensemble'
         
+        self.skip_actions = 6
         if self.control_mode == 'receding_horizon_control':
             # self.max_len = self.model.model.action_horizon//2
-            self.max_len = 14
+            self.max_len = 16
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
-            self.action_queue = deque([],maxlen=self.model.model.action_horizon)
+            self.action_queue = deque([],maxlen=self.model.model.action_horizon - self.skip_actions)
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         
         self._setup_scene()
@@ -328,34 +329,33 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
-                # import pdb; pdb.set_trace()
-                new_actions = deque(action[:self.model.model.action_horizon])
+                new_actions = deque(action[self.skip_actions:self.model.model.action_horizon])
                 self.action_queue.append(new_actions)
                 if self.model.model.pred_left_only or self.model.model.pred_right_only:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.03
+                k = 0.01
+                # k = 0.1
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
-                    # self._update_action_queue_viz()
+
                 exp_weights = onp.exp(k * onp.arange(actions_current_timestep.shape[0]))
                 exp_weights = exp_weights / exp_weights.sum()
-                # import pdb; pdb.set_trace()
+
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
-                # action[9] = action_L[0,-1]
-                # action[19] = action_R[0,-1]
+                # action[9] = action_L[2,-1]
+                # action[19] = action_R[2,-1]
+
                 
             # receding horizon # check the receding horizon block as well
             if self.control_mode == 'receding_horizon_control':
                 if len(self.action_queue) == self.max_len: # If at max, discard a few due to latency
-                    self.action_queue.popleft()
-                    self.action_queue.popleft()
-                    self.action_queue.popleft()
-                    self.action_queue.popleft()
-                    self.action_queue.popleft()
+                    for i in range(self.skip_actions):
+                        self.action_queue.popleft()
+                        
                 if len(self.action_queue) == 0: 
                     self.action_queue = deque([a for a in action[:self.max_len]])
                 action = self.action_queue.popleft()
@@ -679,11 +679,20 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250314_2126", 
     # ckpt_id: int = 100, #some signal on trajinterp
 
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2247/", 
-    ckpt_id: int = 130, # more signal on trajinterp
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2247/", 
+    # ckpt_id: int = 130, # more signal on trajinterp
 
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2248_1hist/", 
     # ckpt_id: int = 275,
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250317_2121/", 
+    # ckpt_id: int = 50, # DINO enc diffusion
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_1250/", 
+    # ckpt_id: int = 5, 
+
+    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250331_2233/", 
+    ckpt_id: int = 275,
 
     collect_data: bool = False,
     task_name : str = 'move white mug onto black coffee machine'
