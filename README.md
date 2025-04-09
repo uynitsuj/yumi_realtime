@@ -29,5 +29,5 @@ After a successful install, read the [usage instructions](USAGE_GUIDE.md).
 - [x] Debug VRPolicy action behavior while homing
 - [x] Debug frame twitching in visualization
 - [x] Implement Diffusion Policy Controller
-- [x] Implement NVIDIA Isaac-GR00T Policy Controller
-- [x] Implement Physical Intelligence's PI-0 Policy Controller
+- [x] Implement [NVIDIA Isaac-GR00T](https://developer.nvidia.com/isaac/gr00t) Policy Controller
+- [x] Implement [Physical Intelligence π0](https://www.physicalintelligence.company/blog/pi0) Policy Controller
