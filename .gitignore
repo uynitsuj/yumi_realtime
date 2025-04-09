@@ -19,3 +19,4 @@ debug/
 *.h5
 *.png
 *.pyc
+uv.lock
