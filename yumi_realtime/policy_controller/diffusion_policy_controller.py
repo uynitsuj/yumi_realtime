@@ -53,6 +53,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.camera_buffers = {}
         self.camera_topics = [topic[0] for topic in rospy.get_published_topics() if 'sensor_msgs/Image' in topic[1]]
         
+        self.relative_action_mode = False
+        
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
         self.main_camera = "camera_0"
@@ -185,7 +187,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(50) # 150Hz control loop
+        rate = rospy.Rate(150) # 150Hz control loop
         rate = None          
         self.home()
         i = 0
@@ -260,6 +262,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 current_right_gripper = input["proprio"][0, -1, 19] < self.gripper_thres
                 
                 print("current_left_gripper: ", current_left_gripper)
+                print("current_right_gripper: ", current_right_gripper)
+
 
                 # delta pose 
                 target_proprio_left = self.last_action[:3]
@@ -280,7 +284,6 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # receding horizon control
             if self.control_mode == 'receding_horizon_control':
                 if len(self.action_queue) > 0:
-                    # self._update_action_queue_viz()
                     action = self.action_queue.popleft()
                     self._yumi_control(action, rate)
                     continue
@@ -322,11 +325,18 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             self.action_prediction = action_prediction
             self._update_action_queue_viz()
 
-            action_L = action_prediction[0,:,:10]
-            action_R = action_prediction[0,:,10:]
+            # Handle relative vs absolute action predictions
+            if hasattr(self, 'relative_action_mode') and self.relative_action_mode:
+                # import pdb; pdb.set_trace()
+                # action_L = convert_abs_action(action_prediction[:,:,:10], self.cur_proprio[:10][None,None])[0]
+                action_L = action_prediction[0,:,:10]
+                action_R = convert_abs_action(action_prediction[:,:,10:], self.cur_proprio[10:][None,None])[0]
+            else:
+                action_L = action_prediction[0,:,:10]
+                action_R = action_prediction[0,:,10:]
             
             action = onp.concatenate([action_L, action_R], axis=-1)
-            
+
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
                 new_actions = deque(action[self.skip_actions:self.model.model.action_horizon])
@@ -691,8 +701,11 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_1250/", 
     # ckpt_id: int = 5, 
 
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250331_2233/", 
-    ckpt_id: int = 275,
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250319_1715/", 
+    # ckpt_id: int = 299, #Diffusion working on coffee maker
+    
+    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
+    ckpt_id: int = 30,
 
     collect_data: bool = False,
     task_name : str = 'move white mug onto black coffee machine'

@@ -113,7 +113,7 @@ if __name__ == '__main__':
         
         # Creates two camera publishers
         camera0 = CameraPublisher(device_id=0, name='camera_1')
-        camera1 = CameraPublisher(device_id=4, name='camera_0')
+        camera1 = CameraPublisher(device_id=5, name='camera_0')
         
         camera0.start()
         camera1.start()
