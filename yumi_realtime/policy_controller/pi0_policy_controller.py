@@ -1,13 +1,12 @@
-from yumi_realtime.controller import YuMiROSInterface
+from yumi_realtime.j_angle_controller import YuMiJointAngleROSInterface
 from loguru import logger
 import numpy as onp
 import tyro
 import rospy
 from typing import Literal
-from yumi_realtime.base import YuMiBaseInterface
 from yumi_realtime.policy_controller.utils.utils import *
 # from dp_gs.dataset.utils import *
-from openpi.scripts.eval_wrapper import DiffusionWrapper
+from openpi.shared.eval_wrapper import OpenPIWrapper
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from collections import deque
@@ -26,21 +25,16 @@ import matplotlib.pyplot as plt
 import os
 
 
-class YuMiPi0PolicyController(YuMiROSInterface):
+class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
     """YuMi controller for pi0 policy control."""
     
     def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, text_prompt: str = None, collect_data: bool = False, debug_mode = False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._interactive_handles = False
-        
-        for side in ['left', 'right']:
-            target_handle = self.transform_handles[side]
-            target_handle.control.visible = False
-        
+        super().__init__(slider_control=False, *args, **kwargs)
+
         assert ckpt_path is not None, "PI0 Policy checkpoint path must be provided."
         
         # Setup Diffusion Policy module and weights
-        self.model = DiffusionWrapper(model_ckpt_folder=ckpt_path, ckpt_id=ckpt_id, text_prompt=text_prompt)
+        self.model = OpenPIWrapper(model_ckpt_folder=ckpt_path, ckpt_id=ckpt_id, text_prompt=text_prompt)
         self.collect_data = collect_data
 
         # ROS Camera Observation Subscriber
@@ -56,7 +50,7 @@ class YuMiPi0PolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_0"
+        self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -78,23 +72,23 @@ class YuMiPi0PolicyController(YuMiROSInterface):
         
         self.cur_proprio = None
         
-        self.cartesian_pose_L = None
-        self.cartesian_pose_R = None
+        # self.cartesian_pose_L = None
+        # self.cartesian_pose_R = None
         
         # Control mode
-        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'receding_horizon_control'
         # self.control_mode = 'temporal_ensemble'
         
-        # self.skip_actions = 6
-        # if self.control_mode == 'receding_horizon_control':
-            # self.max_len = self.model.model.action_horizon//2
-        #     self.max_len = 16
-        #     self.action_queue = deque([],maxlen=self.max_len)
-        # elif self.control_mode == 'temporal_ensemble':
-        #     self.action_queue = deque([],maxlen=self.model.model.action_horizon - self.skip_actions)
-        # self.prev_action = deque([],maxlen=1)
+        self.skip_actions = 0
+        if self.control_mode == 'receding_horizon_control':
+            # self.max_len = self.model.model.action_horizon//2 #TODO: make action horizon a param for openpi wrapper
+            self.max_len = 10
+            self.action_queue = deque([],maxlen=self.max_len)
+        elif self.control_mode == 'temporal_ensemble':
+            self.action_queue = deque([],maxlen=10 - self.skip_actions) #TODO: make action horizon a param for openpi wrapper
+        self.prev_action = deque([],maxlen=1)
         
-        self._setup_scene()
+        # self._setup_scene()
         
         logger.info("PI0 Policy controller initialized")
 
@@ -102,7 +96,7 @@ class YuMiPi0PolicyController(YuMiROSInterface):
             self._setup_collectors()
             self.add_gui_data_collection_controls()
 
-        self.gripper_thres = 0.5
+        self.gripper_thres = 0.01
 
         self.viser_img_handles = {}
 
@@ -141,14 +135,17 @@ class YuMiPi0PolicyController(YuMiROSInterface):
             self.width = image_msg.width
             logger.info(f"First image received from main camera; Observation dim: {self.height}x{self.width}x3")
         
-        if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
-            logger.info("fail to read the cartesian pose")
-            return
+        
+        
+        # if self.cartesian_pose_L is None or self.cartesian_pose_R is None:
+        #     logger.info("fail to read the cartesian pose")
+        #     return
+        
 
         target_time = image_msg.header.stamp.to_nsec()
         
         # Process main camera
-        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8').astype("float32") / 255.0
+        onp_img = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding='rgb8') #.astype("float32") / 255.0
         new_obs = onp.transpose(onp_img, (2, 0, 1))  # C, H, W
         
         # Get synchronized observations from other cameras
@@ -165,7 +162,7 @@ class YuMiPi0PolicyController(YuMiROSInterface):
                 buffer,
                 key=lambda msg: abs(msg.header.stamp.to_nsec() - target_time)
             )
-            onp_img = self.bridge.imgmsg_to_cv2(closest_msg, desired_encoding='rgb8').astype("float32") / 255.0
+            onp_img = self.bridge.imgmsg_to_cv2(closest_msg, desired_encoding='rgb8') #.astype("float32") / 255.0
             synced_obs[camera_name] = onp.transpose(onp_img, (2, 0, 1))
         
         if not all_cameras_ready:
@@ -192,13 +189,13 @@ class YuMiPi0PolicyController(YuMiROSInterface):
         i = 0
         start = time.time()
         while ((self.height is None or self.width is None) 
-               or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) 
+            #    or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) 
                or time.time() - start < 7
                or len(self.proprio_buffer) != 1):
             self.home()
             if rate is not None:
                 rate.sleep()
-            self.solve_ik()
+            # self.solve_ik()
             self.update_visualization()
             
             super().publish_joint_commands()
@@ -220,59 +217,35 @@ class YuMiPi0PolicyController(YuMiROSInterface):
                 self.save_success_button.disabled = False
                 self.save_failure_button.disabled = False
 
-        # Prealloc diffusion input tensors
-        camera_count = len(self.observation_buffers.keys())
-        self.input_obs_tensor = torch.empty(
-            (1, 1, camera_count, 3, self.height, self.width),
-            dtype=torch.float32,
-            device='cpu'
-        )
-
-        action_dim = len(self.proprio_buffer[0])
-        self.input_proprio_tensor = torch.empty(
-            (1, 1, action_dim),  # Assuming 16 is the proprio dimension
-            dtype=torch.float32,
-            device='cpu'
-        )
-
         step = 0
         self.last_action = None
         while not rospy.is_shutdown():
             assert len(self.proprio_buffer) == 1
-            # Stack all camera observations
-            
-            if self.debug_mode:
-                _img_0 = (stacked_obs[-1][0].transpose([1,2,0])*255).astype(onp.uint8)
-                _img_1 = (stacked_obs[-1][1].transpose([1,2,0])*255).astype(onp.uint8)
-                list(self.viser_img_handles.items())[0][1].image = _img_0
-                list(self.viser_img_handles.items())[1][1].image = _img_1
-            
-            self._update_proprio_queue_viz()
-            
+                        
             start = time.time()
             step += 1
 
-            if self.last_action is not None:
+            if self.last_action is not None: # TODO: fix blocking ctl for joint angle control
                 # check gripper state of last action 
-                target_left_gripper = self.last_action[9] < self.gripper_thres
-                target_right_gripper = self.last_action[19] < self.gripper_thres
+                target_left_gripper = self.last_action[-2] < self.gripper_thres
+                target_right_gripper = self.last_action[-1] < self.gripper_thres
 
-                current_left_gripper = input["proprio"][0, -1, 9] < self.gripper_thres
-                current_right_gripper = input["proprio"][0, -1, 19] < self.gripper_thres
+                current_left_gripper = input["proprio"][0, -1, -2] < self.gripper_thres
+                current_right_gripper = input["proprio"][0, -1, -1] < self.gripper_thres
                 
                 print("current_left_gripper: ", current_left_gripper)
 
                 # delta pose 
-                target_proprio_left = self.last_action[:3]
-                current_proprio_left = input["proprio"][0, -1, :3].numpy()
+                target_proprio_left = self.last_action[:-2]
+                current_proprio_left = input["proprio"][0, -1, :-2]
             
                 # calculate lag 
-                xyz_lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
-                print("lag: ", xyz_lag)
+                lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
+                print("lag: ", lag)
 
                 # if they are in disgreemnt, gripper control with last action 
                 # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
-                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0020:
+                if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or lag > 0.020:
                     print("blocking with last action")
                     self._yumi_control(self.last_action, rate)
                     self.last_action = None
@@ -294,38 +267,30 @@ class YuMiPi0PolicyController(YuMiROSInterface):
                 all_camera_obs.append(cam_obs)
             
             # Stack along the N_C dimension
-            stacked_obs = onp.stack(all_camera_obs, axis=1)  # [T, N_C, C, H, W]
-            self.input_obs_tensor.copy_(torch.from_numpy(stacked_obs).unsqueeze(0))
+            stacked_obs = onp.stack(all_camera_obs, axis=1) # [T, N_C, C, H, W]
+            if self.debug_mode:
+                _img_0 = (stacked_obs[-1][0].transpose([1,2,0]))
+                _img_1 = (stacked_obs[-1][1].transpose([1,2,0]))
+                list(self.viser_img_handles.items())[0][1].image = _img_0
+                list(self.viser_img_handles.items())[1][1].image = _img_1
+                        
+            stacked_obs = onp.transpose(onp.expand_dims(stacked_obs, axis=0), (0, 1, 2, 4, 5, 3)) # [T, N_C, C, H, W] -> [B, T, N_C, H, W, C]
             
-            proprio_array = onp.asarray(self.proprio_buffer)
-            self.input_proprio_tensor.copy_(torch.flip(torch.from_numpy(proprio_array).unsqueeze(0), [1]))
+            proprio_array = onp.expand_dims(onp.asarray(self.proprio_buffer), axis=0) # [T, 16] -> [B, T, 16]
             
-            #TODO: Inputs are no longer tensors but numpy arrays
-            
-            """
-            Model input expected: 
-            nbatch["observation"]
-            Type: ndarray
-            Dtype: uint8
-            Dims: (B, T, num_cameras, H, W, C)
-
-            nbatch["proprio"]
-            Type: ndarray
-            Dtype: float64
-            Dim: (B, T, 16), B=1
-            """
-
             # Create input dict referencing pre-allocated tensors
             input = {
-                "observation": self.input_obs_tensor,
-                "proprio": self.input_proprio_tensor
+                "observation": stacked_obs,
+                "proprio": proprio_array
             }
 
             inference_start = time.time()
-            action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
 
+            action_prediction = self.model(input) # PI0 inference step
+            
             print("\nprediction called\n")
             print("Inference time: ", time.time() - inference_start)
+            
             if self.breakpt_next_inference:
                 from datetime import datetime
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -335,24 +300,15 @@ class YuMiPi0PolicyController(YuMiROSInterface):
                 import pdb; pdb.set_trace()
 
             self.action_prediction = action_prediction
-            self._update_action_queue_viz()
 
-            action_L = action_prediction[0,:,:10]
-            action_R = action_prediction[0,:,10:]
-            
-            action = onp.concatenate([action_L, action_R], axis=-1)
-            
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
-                new_actions = deque(action[self.skip_actions:self.model.model.action_horizon])
+                new_actions = deque(action_prediction[self.skip_actions:len(action_prediction)])
                 self.action_queue.append(new_actions)
-                if self.model.model.pred_left_only or self.model.model.pred_right_only:
-                    actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim*2))
-                else:
-                    actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
+                actions_current_timestep = onp.empty((len(self.action_queue), action_prediction.shape[1]))
                 
                 k = 0.01
-                # k = 0.1
+
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
 
@@ -361,18 +317,17 @@ class YuMiPi0PolicyController(YuMiROSInterface):
 
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
-                # action[9] = action_L[2,-1]
-                # action[19] = action_R[2,-1]
-
                 
             # receding horizon # check the receding horizon block as well
             if self.control_mode == 'receding_horizon_control':
                 if len(self.action_queue) == self.max_len: # If at max, discard a few due to latency
                     for i in range(self.skip_actions):
                         self.action_queue.popleft()
+                    for i in range(5):
+                        self.action_queue.pop()
                         
                 if len(self.action_queue) == 0: 
-                    self.action_queue = deque([a for a in action[:self.max_len]])
+                    self.action_queue = deque([a for a in action_prediction[:self.max_len]])
                 action = self.action_queue.popleft()
             
             # update yumi action 
@@ -385,68 +340,114 @@ class YuMiPi0PolicyController(YuMiROSInterface):
         ######################################################################
         print("action update called")
         self.last_action = action
-        l_act = action_10d_to_8d(action[:10])
-        r_act = action_10d_to_8d(action[10:])
-        l_xyz, l_wxyz, l_gripper_cmd = l_act[:3], l_act[3:-1], l_act[-1]
-        r_xyz, r_wxyz, r_gripper_cmd = r_act[:3], r_act[3:-1], r_act[-1]
-
-        if l_xyz[2] < 0.005:
-            l_xyz[2] = 0.006
-            # import pdb; pdb.set_trace()
-        if r_xyz[2] < 0.005:
-            r_xyz[2] = 0.006
-            # import pdb; pdb.set_trace()
-        print("left xyz: ", l_xyz)
-        print("left gripper: ", l_gripper_cmd)
+        
+        # Map the action to the correct joint order for the robot
+        mapped_action = self._map_action_to_robot_joints(action)
+        
+        # Extract gripper commands
+        l_gripper_cmd = mapped_action[15]  # Left gripper is at index 14
+        r_gripper_cmd = mapped_action[14]  # Right gripper is at index 15
 
         self.left_gripper_signal.value = l_gripper_cmd * 1e3
         self.right_gripper_signal.value = r_gripper_cmd * 1e3
 
-        super().update_target_pose(
-        side='left',
-        position=l_xyz,
-        wxyz=l_wxyz,
-        gripper_state=bool(l_gripper_cmd>self.gripper_thres), 
+        super().update_target_joints(
+        joints=mapped_action,
         enable=True
         )
         
-        super().update_target_pose(
-        side='right',
-        position=r_xyz,
-        wxyz=r_wxyz,
-        gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
-        enable=True
-        )
         ######################################################################
         
-        self.solve_ik()
         self.update_visualization()
         super().publish_joint_commands()
         
         if rate is not None:
             rate.sleep()
     
-    def update_curr_proprio(self):
-        # TODO: Rewrite this to be (16,) joint positions in format 
-        # yumi_joint_1_l
-        # yumi_joint_1_r
-        # yumi_joint_2_l
-        # yumi_joint_2_r
-        # yumi_joint_7_l
-        # yumi_joint_7_r
-        # yumi_joint_3_l
-        # yumi_joint_3_r
-        # yumi_joint_4_l
-        # yumi_joint_4_r
-        # yumi_joint_5_l
-        # yumi_joint_5_r
-        # yumi_joint_6_l
-        # yumi_joint_6_r
-        # gripper_l_joint
-        # gripper_r_joint
-
+    def _map_action_to_robot_joints(self, action):
+        """
+        Map the action from the model's format to the robot's joint order.
         
-        self.cur_proprio = # TODO
+        Model format (action):
+        yumi_joint_1_l, yumi_joint_1_r, yumi_joint_2_l, yumi_joint_2_r, 
+        yumi_joint_7_l, yumi_joint_7_r, yumi_joint_3_l, yumi_joint_3_r,
+        yumi_joint_4_l, yumi_joint_4_r, yumi_joint_5_l, yumi_joint_5_r,
+        yumi_joint_6_l, yumi_joint_6_r, gripper_l_joint, gripper_r_joint
+        
+        Robot format (self.joints):
+        yumi_joint_1_r, yumi_joint_2_r, yumi_joint_7_r, yumi_joint_3_r,
+        yumi_joint_4_r, yumi_joint_5_r, yumi_joint_6_r, yumi_joint_1_l,
+        yumi_joint_2_l, yumi_joint_7_l, yumi_joint_3_l, yumi_joint_4_l,
+        yumi_joint_5_l, yumi_joint_6_l, gripper_r_joint, gripper_l_joint
+        """
+        # Create a new array with the correct order
+        mapped_action = onp.zeros(16)
+        
+        # Map right arm joints
+        mapped_action[0] = action[1]  # yumi_joint_1_r
+        mapped_action[1] = action[3]  # yumi_joint_2_r
+        mapped_action[2] = action[5]  # yumi_joint_7_r
+        mapped_action[3] = action[7]  # yumi_joint_3_r
+        mapped_action[4] = action[9]  # yumi_joint_4_r
+        mapped_action[5] = action[11] # yumi_joint_5_r
+        mapped_action[6] = action[13] # yumi_joint_6_r
+        
+        # Map left arm joints
+        mapped_action[7] = action[0]  # yumi_joint_1_l
+        mapped_action[8] = action[2]  # yumi_joint_2_l
+        mapped_action[9] = action[4]  # yumi_joint_7_l
+        mapped_action[10] = action[6] # yumi_joint_3_l
+        mapped_action[11] = action[8] # yumi_joint_4_l
+        mapped_action[12] = action[10] # yumi_joint_5_l
+        mapped_action[13] = action[12] # yumi_joint_6_l
+        
+        # Map gripper joints
+        mapped_action[14] = action[15] # gripper_r_joint
+        mapped_action[15] = action[14] # gripper_l_joint
+        
+        return mapped_action
+    
+    def update_curr_proprio(self):
+        """
+        Update the current proprioception state by mapping the robot's joint order to the model's format.
+        
+        Robot format (self.joints):
+        yumi_joint_1_r, yumi_joint_2_r, yumi_joint_7_r, yumi_joint_3_r,
+        yumi_joint_4_r, yumi_joint_5_r, yumi_joint_6_r, yumi_joint_1_l,
+        yumi_joint_2_l, yumi_joint_7_l, yumi_joint_3_l, yumi_joint_4_l,
+        yumi_joint_5_l, yumi_joint_6_l, gripper_r_joint, gripper_l_joint
+        
+        Model format (self.cur_proprio):
+        yumi_joint_1_l, yumi_joint_1_r, yumi_joint_2_l, yumi_joint_2_r, 
+        yumi_joint_7_l, yumi_joint_7_r, yumi_joint_3_l, yumi_joint_3_r,
+        yumi_joint_4_l, yumi_joint_4_r, yumi_joint_5_l, yumi_joint_5_r,
+        yumi_joint_6_l, yumi_joint_6_r, gripper_l_joint, gripper_r_joint
+        """
+        # Create a new array with the correct order
+        self.cur_proprio = onp.zeros(16)
+        
+        # Map left arm joints
+        self.cur_proprio[0] = self.joints[7]  # yumi_joint_1_l
+        self.cur_proprio[2] = self.joints[8]  # yumi_joint_2_l
+        self.cur_proprio[4] = self.joints[9]  # yumi_joint_7_l
+        self.cur_proprio[6] = self.joints[10] # yumi_joint_3_l
+        self.cur_proprio[8] = self.joints[11] # yumi_joint_4_l
+        self.cur_proprio[10] = self.joints[12] # yumi_joint_5_l
+        self.cur_proprio[12] = self.joints[13] # yumi_joint_6_l
+        
+        # Map right arm joints
+        self.cur_proprio[1] = self.joints[0]  # yumi_joint_1_r
+        self.cur_proprio[3] = self.joints[1]  # yumi_joint_2_r
+        self.cur_proprio[5] = self.joints[2]  # yumi_joint_7_r
+        self.cur_proprio[7] = self.joints[3]  # yumi_joint_3_r
+        self.cur_proprio[9] = self.joints[4]  # yumi_joint_4_r
+        self.cur_proprio[11] = self.joints[5] # yumi_joint_5_r
+        self.cur_proprio[13] = self.joints[6] # yumi_joint_6_r
+        
+        # Map gripper joints
+        self.cur_proprio[14] = self.joints[15] # gripper_l_joint
+        self.cur_proprio[15] = self.joints[14] # gripper_r_joint
+        
         assert self.cur_proprio.shape == (16,)
 
         self.proprio_buffer.append(self.cur_proprio)
@@ -654,76 +655,15 @@ class YuMiPi0PolicyController(YuMiROSInterface):
 
        
 def main(
-    # some signal 
-    # ckpt_path : str = "/home/xi/checkpoints/241203_2002", 
-    # ckpt_id: int = 99
-    
-    # Dec 4
-    # ckpt_path : str = "/home/xi/checkpoints/241203_2104", 
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/checkpoints/241203_217", 
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/checkpoints/241203_2108", 
-    # ckpt_id : int = 599,
-
-    # ckpt_path : str = "/home/xi/checkpoints/241205_1219",
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/checkpoints/241205_1547",
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/241223_1409_athena5", 
-    # ckpt_id : int = 70,
-
-    # ckpt_path : str = "/home/xi/Documents/dp_gs/out_dir/241211_1403_athena5", 
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/checkpoints/241205_1609",
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/241230_2055_athena5",
-    # ckpt_id : int = 299,
-
-    # ckpt_path : str = "/home/xi/yumi_realtime/dependencies/dp_gs/output/250103_1706_sim_athena5",
-    # ckpt_id : int = 299,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger/250122_1721", # works!
-    # ckpt_id: int = 340,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250123_2225", # first bimanual
-    # ckpt_id: int = 490,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_pick_tiger_bimanual/250124_1935",
-    # ckpt_id: int = 400,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250311_2134", # first datagen working, coffee maker no aug
-    # ckpt_id: int = 15,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250314_2126", 
-    # ckpt_id: int = 100, #some signal on trajinterp
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2247/", 
-    # ckpt_id: int = 130, # more signal on trajinterp
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_2248_1hist/", 
-    # ckpt_id: int = 275,
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250317_2121/", 
-    # ckpt_id: int = 50, # DINO enc diffusion
-
-    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250316_1250/", 
-    # ckpt_id: int = 5, 
-
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250331_2233/", 
-    ckpt_id: int = 275,
+    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/pi0_fast_yumi_finetune/", 
+    ckpt_id: int = 29999,
 
     collect_data: bool = False,
-    task_name : str = 'move white mug onto black coffee machine'
+    debug_mode: bool = True,
+    task_name : str = 'put the white cup on the coffee machine',
     ): 
     
-    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)
+    yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, task_name, collect_data, debug_mode)
 
     if collect_data:
         logger.info("Start data collection service")

@@ -40,16 +40,17 @@ class YuMiJointAngleBaseInterface:
         "yumi_joint_4_l": 1.90125141,
         "yumi_joint_5_l": 1.3205139,
         "yumi_joint_6_l": 2.43563939,
-        "gripper_r_joint": 0,
-        "gripper_l_joint": 0,
+        "gripper_r_joint": 0.025,
+        "gripper_l_joint": 0.025,
     }
 
     def __init__(
         self,
         minimal: bool = False,
+        slider_control: bool = True,
     ):
         self.minimal = minimal
-        self.slider_control = True
+        self.slider_control = slider_control
         # Set device
 
         # Initialize viser server
@@ -103,8 +104,8 @@ class YuMiJointAngleBaseInterface:
         self.base_frame.wxyz = onp.array(self.base_pose.rotation().wxyz)
         
         # Update robot configuration
-        if not self.slider_control:
-            self.urdf_vis.update_cfg(onp.array(self.joints))
+        self.urdf_vis.update_cfg(onp.array(self.joints))
+
 
     def create_robot_control_sliders(self) -> tuple[list[viser.GuiInputHandle[float]], list[float]]:
         """Create slider for each joint of the robot. We also update robot model
@@ -125,11 +126,11 @@ class YuMiJointAngleBaseInterface:
                 step=0.5e-3,
                 initial_value=initial_pos,
             )
-            slider.on_update(  # When sliders move, we update the URDF configuration.
-                lambda _: self.urdf_vis.update_cfg(
-                    onp.array([slider.value for slider in slider_handles])
-                )
-            )
+            
+            @slider.on_update
+            def _(_):
+                self.joints = onp.array([slider.value for slider in slider_handles])
+                
             slider_handles.append(slider)
             initial_config.append(initial_pos)
         return slider_handles, initial_config
@@ -141,9 +142,7 @@ class YuMiJointAngleBaseInterface:
     def run(self):
         """Main run loop."""
         while True:
-            self.update_visualization()
-            # self.urdf_vis.update_cfg(onp.array(self.joints)) # Uncomment in parent classes if accessing self.joints directly
-            
+            self.update_visualization()            
 
 if __name__ == "__main__":
     yumi_interface = YuMiJointAngleBaseInterface()

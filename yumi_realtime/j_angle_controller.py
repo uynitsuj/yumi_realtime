@@ -1,4 +1,4 @@
-from yumi_realtime.base import YuMiJointAngleBaseInterface
+from yumi_realtime.j_angle_base import YuMiJointAngleBaseInterface
 from loguru import logger
 import viser
 import tyro
@@ -46,16 +46,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
                 Float64MultiArray, 
                 queue_size=10
             )
-            self.tf_left_pub = rospy.Publisher(
-                "yumi/tf_left_real", 
-                TransformStamped, 
-                queue_size=10
-            )
-            self.tf_right_pub = rospy.Publisher(
-                "yumi/tf_right_real", 
-                TransformStamped, 
-                queue_size=10
-            )
+
             self.ja_combined_pub = rospy.Publisher(
                 "/yumi/combined/joint_states",
                 JointState,
@@ -132,26 +123,6 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         for mesh in self.urdf_vis_real._meshes:
             mesh.opacity = 0.4
             
-        # Add real robot transform handles
-        # self.real_transform_handles = {
-        #     'left': TransformHandle(
-        #         frame=self.server.scene.add_frame(
-        #             "tf_left_real",
-        #             axes_length=0.5 * self.tf_size_handle.value,
-        #             axes_radius=0.01 * self.tf_size_handle.value,
-        #             origin_radius=0.1 * self.tf_size_handle.value,
-        #         )
-        #     ),
-        #     'right': TransformHandle(
-        #         frame=self.server.scene.add_frame(
-        #             "tf_right_real",
-        #             axes_length=0.5 * self.tf_size_handle.value,
-        #             axes_radius=0.01 * self.tf_size_handle.value,
-        #             origin_radius=0.1 * self.tf_size_handle.value,
-        #         )
-        #     )
-        # }
-        
     def start_egm_control(self):
         """Start EGM joint control."""
         try:
@@ -251,48 +222,13 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
                         return 0
                 assert type(self.gripper_L_pos) == int and type(self.gripper_R_pos) == int
                 
-                # Update real robot visualization                
+                # Update real robot visualization     
                 self.urdf_vis_real.update_cfg(joints_real)
                 
-                # Update real robot transform frames
-                # joints_array = onp.array(list(joints_real.values()), dtype=onp.float32)
-                # fk_frames = self.kin.forward_kinematics(joints_array)
-                
-                # for side, joint_name in [('left', 'left_dummy_joint'), ('right', 'right_dummy_joint')]:
-                # # for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
-                #     joint_idx = self.kin.joint_names.index(joint_name)
-                #     T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
-                    
-                #     # Update transform handles
-                #     self.real_transform_handles[side].frame.position = onp.array(T_target_world.translation())
-                #     self.real_transform_handles[side].frame.wxyz = onp.array(T_target_world.rotation().wxyz)
-                    
-                #     # Publish TF
-                #     tf_msg = TransformStamped(
-                #         header=Header(stamp=rospy.Time.now()),
-                #         transform=Transform(
-                #             translation=Vector3(*T_target_world.translation()),
-                #             rotation=Quaternion(
-                #                 x=T_target_world.rotation().wxyz[1],
-                #                 y=T_target_world.rotation().wxyz[2],
-                #                 z=T_target_world.rotation().wxyz[3],
-                #                 w=T_target_world.rotation().wxyz[0]
-                #             )
-                #         )
-                #     )
-                    
-                #     if side == 'left':
-                #         self.cartesian_pose_L = tf_msg
-                #         self.tf_left_pub.publish(tf_msg)
-                #     else:
-                #         self.cartesian_pose_R = tf_msg
-                #         self.tf_right_pub.publish(tf_msg)
-                    
                 if self._first_js_callback:
                     logger.info(f"Received first joint state update for arm")
                     self.update_target_joints(
-                        joints= self.joints,
-                        gripper_state=False,
+                        joints=self.joints,
                         enable=False
                     )
                     self._first_js_callback = False
@@ -302,19 +238,6 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         
     def home(self):
         self.joints = self.rest_pose
-        # Update real robot transform frames
-        # fk_frames = self.kin.forward_kinematics(self.joints.copy())
-        
-        # for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
-        #     joint_idx = self.kin.joint_names.index(joint_name)
-        #     T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
-        #     self.update_target_pose(
-        #         side=side,
-        #         position=onp.array(T_target_world.translation()),
-        #         wxyz=onp.array(T_target_world.rotation().wxyz),
-        #         gripper_state=False,
-        #         enable=False
-        #     )
     
     def _egm_state_callback(self, data: EGMState):
         """Monitor EGM state and restart if necessary."""
@@ -325,7 +248,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
             self.start_egm_control()
             rospy.sleep(1.0)
             
-    def update_target_joints(self, joints: onp.ndarray, gripper_state: bool | float, enable: bool):
+    def update_target_joints(self, joints: onp.ndarray, enable: bool):
         """
         Update target joint angles and gripper state
         joints should be in format
@@ -347,15 +270,11 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         "gripper_l_joint",
         """
         self.joints = joints
+        self.joints[7:13] = list(self.YUMI_REST_POSE.values())[7:13]
         
-        if type(gripper_state) == bool:
-            self.call_gripper(side, gripper_state, enable)
-        elif type(gripper_state) == float:
-            self.call_gripper_pos(side, gripper_state, enable)
-        else:
-            raise ValueError(f"Invalid type gripper_state {gripper_state}, must be bool or float")
-        
-    
+        self.call_gripper("right", joints[-2] < 0.015, enable)
+        self.call_gripper("left", joints[-1] < 0.015, enable)
+
     def call_gripper(self, side: Literal['left', 'right'], gripper_state: bool, enable: bool):       
         # Call gripper I/O services
         prev_gripper = self.prev_gripper_L if side == 'left' else self.prev_gripper_R
@@ -459,7 +378,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
                 step=1.5,
                 initial_value=int(self.gripper_L_pos)/10,
             )
-            self.joints = self.joints.at[15].set(int(self.gripper_L_pos)/10000)
+            self.joints[15] = int(self.gripper_L_pos)/10000
             self.bin_left_grip_button_group = self.server.gui.add_button_group(
                 label="Left Gripper Actions",
                 options=["Calibrate", "Open", "Close"],
@@ -471,7 +390,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
                 step=1.5,
                 initial_value=int(self.gripper_R_pos)/10,
             )
-            self.joints = self.joints.at[14].set(int(self.gripper_R_pos)/10000)
+            self.joints[14] = int(self.gripper_R_pos)/10000
             self.bin_right_grip_button_group = self.server.gui.add_button_group(
                 label="Right Gripper Actions",
                 options=["Calibrate", "Open", "Close"],
@@ -480,12 +399,12 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         def _(_) -> None:
             """Callback for left gripper control."""
             self.call_gripper_pos('left', self.left_grip_gui_slider.value/1000, True)
-            self.joints = self.joints.at[15].set(self.left_grip_gui_slider.value/1000)
+            self.joints[15] = self.left_grip_gui_slider.value/1000
         @self.right_grip_gui_slider.on_update
         def _(_) -> None:
             """Callback for right gripper control."""
             self.call_gripper_pos('right', self.right_grip_gui_slider.value/1000, True)
-            self.joints = self.joints.at[14].set(self.right_grip_gui_slider.value/1000)
+            self.joints[14] = self.right_grip_gui_slider.value/1000
         @self.bin_left_grip_button_group.on_click
         def _(_) -> None:
             """Callback for left gripper actions."""
@@ -511,9 +430,8 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         self.add_gui_gripper_controls()
         while not rospy.is_shutdown():
             # Run base class IK and visualization updates
-            # super().solve_ik()
             super().update_visualization()
-            
+                        
             if self._first_js_callback:
                 continue
 

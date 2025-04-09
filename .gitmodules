@@ -27,6 +27,14 @@
 [submodule "dependencies/dp_gs"]
 	path = dependencies/dp_gs
 	url = https://github.com/Max-Fu/dp_gs.git
+[submodule "dependencies/openpi"]
+	path = dependencies/openpi
+	url = https://github.com/Max-Fu/openpi.git
+[submodule "dependencies/Isaac-GR00T"]
+	path = dependencies/Isaac-GR00T
+	url = https://github.com/Max-Fu/Isaac-GR00T.git
+	branch = 60b54f1
 [submodule "dependencies/viser"]
 	path = dependencies/viser
 	url = https://github.com/nerfstudio-project/viser.git
+
