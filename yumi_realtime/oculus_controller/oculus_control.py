@@ -14,7 +14,8 @@ from std_srvs.srv import Empty, EmptyResponse
 class YuMiOculusInterface(YuMiROSInterface):
     """YuMi interface with Oculus VR control."""
     
-    def __init__(self, collect_data: bool = False, data_collector: DataCollector = None, *args, **kwargs):
+    def __init__(self, collect_data: bool = False, *args, **kwargs):
+        self.collect_data = collect_data
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
@@ -33,9 +34,6 @@ class YuMiOculusInterface(YuMiROSInterface):
         )
         
         self.collect_data = collect_data
-        if self.collect_data:
-            assert data_collector is not None, "Data collector must be provided if collect_data is True"
-            self.data_collector = data_collector
         self.begin_record = False
         self._saving_data = False
         self._homing = False
@@ -47,11 +45,11 @@ class YuMiOculusInterface(YuMiROSInterface):
     def _setup_gui(self):
         
         super()._setup_gui()
-        if self.collect_data:
+        if not self.collect_data:
             return
         with self.server.gui.add_folder("Data"):
             # Add trajectory count display
-            self.success_count_handle = self.server.gui.add_number("Successes", 0, disabled=True)        
+            self.success_count_handle = self.server.gui.add_number("Successes This Session", 0, disabled=True)        
     
     
     def _control_l_callback(self, data: VRPolicyAction):
@@ -109,6 +107,7 @@ class YuMiOculusInterface(YuMiROSInterface):
         if self.collect_data:
             if data.traj_success and not self._saving_data:
                 if not self.begin_record:
+                    self.success_count_handle.value += 1    
                     self.begin_record = True
                     self.pre_home()
                     rospy.sleep(2.0)
@@ -151,9 +150,7 @@ class YuMiOculusInterface(YuMiROSInterface):
                 rospy.sleep(0.5)
                 self._saving_data = False
                 
-            if self.data_collector.total_success_count is not None: 
-                self.success_count_handle.value = self.data_collector.total_success_count
-    
+
 
     def home(self):
         if self.noise_home_noise is None:
@@ -201,16 +198,17 @@ class YuMiOculusInterface(YuMiROSInterface):
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
     collect_data : bool = True,
-    task_name: str = 'yumi_drawer_close_041525_2142'
+    task_name: str = 'yumi_bin_lift_041626_2347'
     ): 
+    
+        
+    yumi_interface = YuMiOculusInterface(collect_data=collect_data)
     
     if collect_data:
         logger.info("Start data collection service")
         data_collector = DataCollector(init_node=False, task_name=task_name)
         yumi_interface._setup_collectors()
-        
-    yumi_interface = YuMiOculusInterface(collect_data=collect_data, data_collector=data_collector)
-    
+
     if "r" in controller: 
         logger.info("Start right controller")
         right_policy = VRPolicy(right_controller=True)
