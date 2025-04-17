@@ -16,10 +16,10 @@ import jaxlie
 import shutil
 from vr_policy.msg import VRPolicyAction, OculusData
 from collections import deque
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
-data_dir = os.path.join(dir_path, "../../trajectories/data")
-
+from pathlib import Path
+# dir_path = os.path.dirname(os.path.realpath(__file__))
+# data_dir = os.path.join(dir_path, "../../trajectories/data")
+data_dir = Path("/home/xi/HDD1")
 class DataCollector:
     def __init__(
         self,
@@ -62,7 +62,7 @@ class DataCollector:
         self.file_lock = Lock()
         
         # Forward kinematics
-        self.urdf = load_urdf("yumi", None)
+        self.urdf = load_urdf(None, Path(os.path.dirname(os.path.abspath(__file__)) + "/../../data/yumi_description/urdf/yumi.urdf"))
         self.kin = JaxKinTree.from_urdf(self.urdf)
         self.base_pose = jaxlie.SE3.identity()
         
@@ -99,7 +99,7 @@ class DataCollector:
                 camera_name = f"camera_{idx}"
                 self.camera_buffers[camera_name] = deque(maxlen=self.max_img_buffer_length)
                 rospy.Subscriber(topic, Image, self.image_callback_extern, callback_args=(camera_name,))
-            
+        
         # Main camera for synchronization (first camera)
         self.main_camera = "camera_0"
         rospy.Subscriber(self.camera_topics[0], Image, self.image_callback)
@@ -229,7 +229,7 @@ class DataCollector:
             fk_frames = self.kin.forward_kinematics(joints_array)
             
             cartesian_pose = onp.zeros(14)
-            for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+            for side, joint_name in [('left', 'left_dummy_joint'), ('right', 'right_dummy_joint')]:
                 joint_idx = self.kin.joint_names.index(joint_name)
                 T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
                 
@@ -454,7 +454,8 @@ if __name__ == '__main__':
     try:
         logger = DataCollector(init_node=True)
         rospy.spin()
-    except rospy.ROSInterruptException:
+    except Exception as e:
+        print(e)
         pass
     finally:
         if 'logger' in locals():

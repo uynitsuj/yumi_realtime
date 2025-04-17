@@ -17,7 +17,7 @@ from std_msgs.msg import Float64MultiArray, Header, String, Float64
 from abb_robot_msgs.srv import GetIOSignal, SetIOSignal, TriggerWithResultCode
 from controller_manager_msgs.srv import SwitchController
 from abb_egm_msgs.msg import EGMState
-from std_srvs.srv import Empty, EmptyResponse
+from std_srvs.srv import Empty
 from yumi_realtime.data_logging.data_collector import DataCollector
 
 class YuMiROSInterface(YuMiBaseInterface):
@@ -33,7 +33,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         self._js_update_lock = threading.Lock()
         self.collect_data = collect_data
         try:
-            rospy.init_node('yumi_controller')
+            rospy.init_node('yumi_controller', disable_signals=True)
             
             visible_topics = rospy.get_published_topics()
             
@@ -302,13 +302,37 @@ class YuMiROSInterface(YuMiBaseInterface):
                         
         except Exception as e:
             logger.error(f"Error in joint state callback: {e}")
+    
+    def pre_home(self):
+        """
+        Raise end effector if too close to table-top z-height
+        """
         
+        for side, pose_tf in [('left', self.cartesian_pose_L), ('right', self.cartesian_pose_R)]:
+            if pose_tf.transform.translation.z.item() < 0.1:
+                self.update_target_pose(
+                    side=side,
+                    position=onp.array([
+                        pose_tf.transform.translation.x, 
+                        pose_tf.transform.translation.y, 
+                        0.2]),
+                    wxyz=onp.array([
+                        pose_tf.transform.rotation.w,
+                        pose_tf.transform.rotation.x,
+                        pose_tf.transform.rotation.y,
+                        pose_tf.transform.rotation.z
+                    ]),
+                    gripper_state=False,
+                    enable=True
+                )
+
+
     def home(self):
         self.joints = self.rest_pose
         # Update real robot transform frames
         fk_frames = self.kin.forward_kinematics(self.joints.copy())
         
-        for side, joint_name in [('left', 'yumi_joint_6_l'), ('right', 'yumi_joint_6_r')]:
+        for side, joint_name in [('left', 'left_dummy_joint'), ('right', 'right_dummy_joint')]:
             joint_idx = self.kin.joint_names.index(joint_name)
             T_target_world = self.base_pose @ jaxlie.SE3(fk_frames[joint_idx])
             self.update_target_pose(

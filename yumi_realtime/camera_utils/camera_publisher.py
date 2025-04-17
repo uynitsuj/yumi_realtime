@@ -5,7 +5,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo
 import threading
 import numpy as np
-
+import os
 
 mtx = np.array([[560.90882899, 0.00000000e+00, 480.40633792],
     [0.00000000e+00, 560.06010885,  282.13156697],
@@ -21,6 +21,7 @@ class CameraPublisher:
         name: str='camera_0',
         image_height: int=270*2,
         image_width: int=480*2,
+        # fps: int=2,
         fps: int=12,
         init_node: bool=False,
         undistort: bool=True
@@ -35,7 +36,7 @@ class CameraPublisher:
         self.undistort = undistort
         
         self.bridge = CvBridge()
-        
+        self.device_id = device_id
         self.cap = cv2.VideoCapture(device_id)
         if not self.cap.isOpened():
             rospy.logerr("Failed to open camera!")
@@ -65,6 +66,9 @@ class CameraPublisher:
     def _run(self):
         """Internal run method that runs in the thread"""
         while not rospy.is_shutdown() and self.running:
+            if not os.path.exists(f'/dev/video{self.device_id}'):
+                rospy.logerr(f"Device ID {self.device_id} no longer detected. Camera hardware disconnected?")
+
             ret, frame = self.cap.read()
 
             if self.undistort:
@@ -113,14 +117,15 @@ if __name__ == '__main__':
         
         # Creates two camera publishers
         camera0 = CameraPublisher(device_id=0, name='camera_1')
-        camera1 = CameraPublisher(device_id=5, name='camera_0')
+        camera1 = CameraPublisher(device_id=4, name='camera_0')
         
         camera0.start()
         camera1.start()
         
         rospy.spin()
         
-    except rospy.ROSInterruptException:
+    except Exception as e:
+        print(e)
         pass
     finally:
         if 'camera0' in locals():

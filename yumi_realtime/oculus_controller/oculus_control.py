@@ -97,8 +97,10 @@ class YuMiOculusInterface(YuMiROSInterface):
             if data.traj_success and not self._saving_data:
                 if not self.begin_record:
                     self.begin_record = True
+                    self.pre_home()
+                    rospy.sleep(2.0)
                     self._homing = True
-                    rospy.sleep(1.5)
+                    rospy.sleep(1.0)
                     self._homing = False
                     self.start_record()
                     rospy.sleep(0.5)
@@ -117,8 +119,10 @@ class YuMiOculusInterface(YuMiROSInterface):
             if data.traj_failure and not self._saving_data:
                 if not self.begin_record:
                     self.begin_record = True
+                    self.pre_home()
+                    rospy.sleep(2.0)
                     self._homing = True
-                    rospy.sleep(1.5)
+                    rospy.sleep(1.0)
                     self._homing = False
                     self.start_record()
                     rospy.sleep(0.5)
@@ -128,7 +132,7 @@ class YuMiOculusInterface(YuMiROSInterface):
                 self.save_failure()
                 self._homing = True
                 self.sample_home_pose()
-                rospy.sleep(1.5)
+                rospy.sleep(1.0)
                 self._homing = False
                 self.start_record()
                 rospy.sleep(0.5)
@@ -153,9 +157,33 @@ class YuMiOculusInterface(YuMiROSInterface):
                 enable=False
             )
 
+    def pre_home(self):
+        """
+        Raise end effector if too close to table-top z-height
+        """
+        
+        for side, pose_tf in [('left', self.cartesian_pose_L), ('right', self.cartesian_pose_R)]:
+            if pose_tf.transform.translation.z.item() < 0.1:
+                self.update_target_pose(
+                    side=side,
+                    position=onp.array([
+                        pose_tf.transform.translation.x, 
+                        pose_tf.transform.translation.y, 
+                        0.2]),
+                    wxyz=onp.array([
+                        pose_tf.transform.rotation.w,
+                        pose_tf.transform.rotation.x,
+                        pose_tf.transform.rotation.y,
+                        pose_tf.transform.rotation.z
+                    ]),
+                    gripper_state=False,
+                    enable=True
+                )
+
+
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
-    collect_data : bool = False
+    collect_data : bool = True
     ): 
     
     yumi_interface = YuMiOculusInterface(collect_data=collect_data)
@@ -169,7 +197,7 @@ def main(
         
     if collect_data:
         logger.info("Start data collection service")
-        data_collector = DataCollector(init_node=False, task_name='pickup_tiger_241226')
+        data_collector = DataCollector(init_node=False, task_name='yumi_drawer_close_041525_2142')
         yumi_interface._setup_collectors()
     print("Run")
     yumi_interface.run()

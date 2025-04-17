@@ -23,6 +23,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+import signal
+
 
 
 class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
@@ -37,6 +39,9 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.model = OpenPIWrapper(model_ckpt_folder=ckpt_path, ckpt_id=ckpt_id, text_prompt=text_prompt)
         self.collect_data = collect_data
 
+        if self.collect_data:
+            self._setup_collectors()
+
         # ROS Camera Observation Subscriber
         self.bridge = CvBridge()
         self.height = None
@@ -48,6 +53,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.camera_buffers = {}
         self.camera_topics = [topic[0] for topic in rospy.get_published_topics() if 'sensor_msgs/Image' in topic[1]]
         
+        self.shutting_down = False
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
         self.main_camera = "camera_1"
@@ -76,8 +82,9 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # self.cartesian_pose_R = None
         
         # Control mode
-        self.control_mode = 'receding_horizon_control'
-        # self.control_mode = 'temporal_ensemble'
+        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'temporal_ensemble'
+        self.skip_every_other_pred = True
         
         self.skip_actions = 0
         if self.control_mode == 'receding_horizon_control':
@@ -85,7 +92,10 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             self.max_len = 10
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
-            self.action_queue = deque([],maxlen=10 - self.skip_actions) #TODO: make action horizon a param for openpi wrapper
+            if self.skip_every_other_pred:
+                self.action_queue = deque([],maxlen=10//2 - self.skip_actions)
+            else:
+                self.action_queue = deque([],maxlen=10 - self.skip_actions) #TODO: make action horizon a param for openpi wrapper
         self.prev_action = deque([],maxlen=1)
         
         # self._setup_scene()
@@ -119,6 +129,92 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         @self.breakpoint_btn.on_click
         def _(_) -> None:
             self.breakpt_next_inference = True
+
+    def signal_handler(self, sig, frame):
+        """Handle Ctrl+C signal by homing the robot and resetting."""
+        if self.shutting_down:
+            return
+            
+        self.shutting_down = True
+        logger.info('\nCtrl+C detected. Homing robot and resetting...')
+        
+        try:
+            # Home the robot
+            # start = time.time()
+            i = 0
+            
+            # logger.info("Pre-Homing...")
+            # while ((self.height is None or self.width is None) 
+            #     or time.time() - start < 2
+            #     or len(self.proprio_buffer) != self.model.model.obs_horizon):
+            #     self.pre_home()
+            #     if self.rate is not None:
+            #         self.rate.sleep()
+            #     self.solve_ik()
+            #     self.update_visualization()
+            #     super().publish_joint_commands()
+            #     if i % 300 == 0:
+            #         self.call_gripper(side = 'left', gripper_state = False, enable = True)
+            #         rospy.sleep(0.2)
+            #         self.call_gripper(side = 'right', gripper_state = False, enable = True)
+            #         i = 0
+            #     i += 1
+            start = time.time()
+            logger.info("Homing...")
+
+            self.proprio_buffer.clear()
+            for key in self.observation_buffers.keys():
+                self.observation_buffers[key].clear()
+            self.last_action = None
+            self.action_queue.clear()
+            
+            while ((self.height is None or self.width is None) 
+                or time.time() - start < 4
+                or len(self.proprio_buffer) != 1):
+                self.home()
+                if self.rate is not None:
+                    self.rate.sleep()
+                # self.solve_ik()
+                self.update_visualization()
+                
+                super().publish_joint_commands()
+                if i % 400 == 0:
+                    self.call_gripper(side = 'left', gripper_state = False, enable = True)
+                    rospy.sleep(0.2)
+                    self.call_gripper(side = 'right', gripper_state = False, enable = True)
+                    i = 0
+                i += 1
+
+            # Prealloc diffusion input tensors
+            # camera_count = len(self.observation_buffers.keys())
+            # self.input_obs_tensor = torch.empty(
+            #     (1, self.model.model.obs_horizon, camera_count, 3, self.height, self.width),
+            #     dtype=torch.float32,
+            #     device='cpu'
+            # )
+
+            # action_dim = len(self.proprio_buffer[0])
+            # self.input_proprio_tensor = torch.empty(
+            #     (1, self.model.model.obs_horizon, action_dim),  # Assuming 20 is the proprio dimension
+            #     dtype=torch.float32,
+            #     device='cpu'
+            # )
+            # If we're collecting data, stop recording
+            if self.collect_data:
+                try:
+                    self.stop_record()
+                    print("Data recording stopped.")
+                except Exception as e:
+                    print(f"Error stopping data recording: {e}")
+            
+
+            # logger.info("Press C to continue once finished homing")
+            # import pdb; pdb.set_trace()
+            self.shutting_down = False
+            self.run()
+
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
 
     def camera_callback(self, image_msg: Image, camera_name: str):
         """Store messages from non-main cameras for synchronization"""
@@ -183,27 +279,49 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
 
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(150) # 150Hz control loop
-        rate = None          
-        self.home()
-        i = 0
+        # Register signal handler for Ctrl+C
+        signal.signal(signal.SIGINT, self.signal_handler)
+        logger.info("Running rollout... press Ctrl+C once to stop early, twice to home+reset.")
+        
+        self.rate = rospy.Rate(150) # 150Hz control loop
+        # self.rate = None   
+        rate = self.rate       
+        
         start = time.time()
+        i=0
+
+        # logger.info("Pre-Homing...")
+        # while ((self.height is None or self.width is None) 
+        #         or time.time() - start < 2
+        #         or len(self.proprio_buffer) != 1):
+        #     self.pre_home()
+        #     if self.rate is not None:
+        #         self.rate.sleep()
+        #     self.solve_ik()
+        #     self.update_visualization()
+        #     super().publish_joint_commands()
+        #     if i % 300 == 0:
+        #         self.call_gripper(side = 'left', gripper_state = False, enable = True)
+        #         rospy.sleep(0.2)
+        #         self.call_gripper(side = 'right', gripper_state = False, enable = True)
+        #         i = 0
+        #     i += 1
+        # start = time.time()
+
+        logger.info("Homing...")
         while ((self.height is None or self.width is None) 
-            #    or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) 
-               or time.time() - start < 7
+               or time.time() - start < 4
                or len(self.proprio_buffer) != 1):
             self.home()
             if rate is not None:
                 rate.sleep()
-            # self.solve_ik()
             self.update_visualization()
             
             super().publish_joint_commands()
-            if i % 400 == 0:
+            if i % 300 == 0:
                 self.call_gripper(side = 'left', gripper_state = False, enable = True)
                 rospy.sleep(0.2)
                 self.call_gripper(side = 'right', gripper_state = False, enable = True)
-                logger.info("Waiting for camera topic or robot pose data...")
                 i = 0
             i += 1
         
@@ -233,7 +351,9 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
                 current_left_gripper = input["proprio"][0, -1, -2] < self.gripper_thres
                 current_right_gripper = input["proprio"][0, -1, -1] < self.gripper_thres
                 
+
                 print("current_left_gripper: ", current_left_gripper)
+                print("current_right_gripper: ", current_right_gripper)
 
                 # delta pose 
                 target_proprio_left = self.last_action[:-2]
@@ -303,6 +423,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
 
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
+                if self.skip_every_other_pred:
+                    action_prediction = action_prediction[::2]
                 new_actions = deque(action_prediction[self.skip_actions:len(action_prediction)])
                 self.action_queue.append(new_actions)
                 actions_current_timestep = onp.empty((len(self.action_queue), action_prediction.shape[1]))
@@ -347,6 +469,10 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # Extract gripper commands
         l_gripper_cmd = mapped_action[15]  # Left gripper is at index 14
         r_gripper_cmd = mapped_action[14]  # Right gripper is at index 15
+        # print("left xyz: ", l_xyz)
+        print("left gripper: ", l_gripper_cmd)
+        # print("right xyz: ", r_xyz)
+        print("right gripper: ", r_gripper_cmd)
 
         self.left_gripper_signal.value = l_gripper_cmd * 1e3
         self.right_gripper_signal.value = r_gripper_cmd * 1e3
@@ -648,15 +774,43 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
     
     def _setup_collectors(self):
         if self.collect_data:
-            self.start_record = rospy.ServiceProxy("/yumi_controller/start_recording", Empty)
-            self.save_success = rospy.ServiceProxy("/yumi_controller/save_success", Empty)
-            self.save_failure = rospy.ServiceProxy("/yumi_controller/save_failure", Empty)
-            self.stop_record = rospy.ServiceProxy("/yumi_controller/stop_recording", Empty)
+            self.start_record = rospy.ServiceProxy("/yumi_ja_controller/start_recording", Empty)
+            self.save_success = rospy.ServiceProxy("/yumi_ja_controller/save_success", Empty)
+            self.save_failure = rospy.ServiceProxy("/yumi_ja_controller/save_failure", Empty)
+            self.stop_record = rospy.ServiceProxy("/yumi_ja_controller/stop_recording", Empty)
 
        
 def main(
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/pi0_fast_yumi_finetune/", 
-    ckpt_id: int = 29999,
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/pi0_fast_yumi_finetune/", 
+    # ckpt_id: int = 29999, # good 1k checkpoint
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_yumi_finetune",
+    # ckpt_id: int = 15000, # also good
+    
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new",
+    # ckpt_id: int = 17000, # 5k checkpoint
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_50",
+    # ckpt_id: int = 23000,
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
+    # ckpt_id: int = 24000,
+
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
+    ckpt_id: int = 23000,
+
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k", 
+    # ckpt_id: int = 23000, 
+
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_50", 
+    # ckpt_id: int = 5000, 
+
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_100", 
+    # ckpt_id: int = 5000, 
+
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_200", 
+    # ckpt_id: int = 5000, 
+    
 
     collect_data: bool = False,
     debug_mode: bool = True,

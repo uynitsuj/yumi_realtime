@@ -24,6 +24,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+import signal
+import sys
 
 class YuMiDiffusionPolicyController(YuMiROSInterface):
     """YuMi controller for diffusion policy control."""
@@ -54,6 +56,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.camera_topics = [topic[0] for topic in rospy.get_published_topics() if 'sensor_msgs/Image' in topic[1]]
         
         self.relative_action_mode = False
+        self.shutting_down = False
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
@@ -86,13 +89,18 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # self.control_mode = 'receding_horizon_control'
         self.control_mode = 'temporal_ensemble'
         
-        self.skip_actions = 6
+        self.skip_actions = 6 # 6 For DP
+        # self.skip_actions = 4
+        self.skip_every_other_pred = False
         if self.control_mode == 'receding_horizon_control':
             # self.max_len = self.model.model.action_horizon//2
             self.max_len = 16
             self.action_queue = deque([],maxlen=self.max_len)
         elif self.control_mode == 'temporal_ensemble':
-            self.action_queue = deque([],maxlen=self.model.model.action_horizon - self.skip_actions)
+            if self.skip_every_other_pred:
+                self.action_queue = deque([],maxlen=self.model.model.action_horizon//3 - self.skip_actions)
+            else:
+                self.action_queue = deque([],maxlen=self.model.model.action_horizon - self.skip_actions)
         self.prev_action = deque([],maxlen=self.model.model.obs_horizon)
         
         self._setup_scene()
@@ -103,7 +111,11 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             self._setup_collectors()
             self.add_gui_data_collection_controls()
 
-        self.gripper_thres = 0.5
+        # self.gripper_thres = 0.59
+        # self.gripper_thres = 0.69
+        # self.gripper_thres = 0.5
+        self.gripper_thres = 0.65
+        # self.gripper_thres = 0.75
 
         self.viser_img_handles = {}
 
@@ -126,6 +138,92 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         @self.breakpoint_btn.on_click
         def _(_) -> None:
             self.breakpt_next_inference = True
+    
+    def signal_handler(self, sig, frame):
+        """Handle Ctrl+C signal by homing the robot and resetting."""
+        if self.shutting_down:
+            return
+            
+        self.shutting_down = True
+        logger.info('\nCtrl+C detected. Homing robot and resetting...')
+        
+        try:
+            # Home the robot
+            start = time.time()
+            i = 0
+            
+            logger.info("Pre-Homing...")
+            while ((self.height is None or self.width is None) 
+                or time.time() - start < 2
+                or len(self.proprio_buffer) != self.model.model.obs_horizon):
+                self.pre_home()
+                if self.rate is not None:
+                    self.rate.sleep()
+                self.solve_ik()
+                self.update_visualization()
+                super().publish_joint_commands()
+                if i % 300 == 0:
+                    self.call_gripper(side = 'left', gripper_state = False, enable = True)
+                    rospy.sleep(0.2)
+                    self.call_gripper(side = 'right', gripper_state = False, enable = True)
+                    i = 0
+                i += 1
+            start = time.time()
+            logger.info("Homing...")
+
+            self.proprio_buffer.clear()
+            for key in self.observation_buffers.keys():
+                self.observation_buffers[key].clear()
+            self.last_action = None
+            self.action_queue.clear()
+            
+            while ((self.height is None or self.width is None) 
+                or time.time() - start < 4
+                or len(self.proprio_buffer) != self.model.model.obs_horizon):
+                self.home()
+                if self.rate is not None:
+                    self.rate.sleep()
+                self.solve_ik()
+                self.update_visualization()
+                
+                super().publish_joint_commands()
+                if i % 400 == 0:
+                    self.call_gripper(side = 'left', gripper_state = False, enable = True)
+                    rospy.sleep(0.2)
+                    self.call_gripper(side = 'right', gripper_state = False, enable = True)
+                    i = 0
+                i += 1
+
+            # Prealloc diffusion input tensors
+            camera_count = len(self.observation_buffers.keys())
+            self.input_obs_tensor = torch.empty(
+                (1, self.model.model.obs_horizon, camera_count, 3, self.height, self.width),
+                dtype=torch.float32,
+                device='cpu'
+            )
+
+            action_dim = len(self.proprio_buffer[0])
+            self.input_proprio_tensor = torch.empty(
+                (1, self.model.model.obs_horizon, action_dim),  # Assuming 20 is the proprio dimension
+                dtype=torch.float32,
+                device='cpu'
+            )
+            # If we're collecting data, stop recording
+            if self.collect_data:
+                try:
+                    self.stop_record()
+                    print("Data recording stopped.")
+                except Exception as e:
+                    print(f"Error stopping data recording: {e}")
+            
+
+            # logger.info("Press C to continue once finished homing")
+            # import pdb; pdb.set_trace()
+            self.shutting_down = False
+            self.run()
+
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
 
     def camera_callback(self, image_msg: Image, camera_name: str):
         """Store messages from non-main cameras for synchronization"""
@@ -187,27 +285,52 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
     def run(self):
         """Diffusion Policy controller loop."""
-        rate = rospy.Rate(150) # 150Hz control loop
-        rate = None          
-        self.home()
+        # Register signal handler for Ctrl+C
+        signal.signal(signal.SIGINT, self.signal_handler)
+        logger.info("Running rollout... press Ctrl+C once to stop early, twice to home+reset.")
+
+        self.rate = rospy.Rate(150) # 150Hz control loop
+        self.rate = None          
+        # self.home()
         i = 0
+        while (self.cartesian_pose_L is None or self.cartesian_pose_R is None or not self.has_jitted):
+            self.solve_ik()
+            time.sleep(0.1)
+
         start = time.time()
+        logger.info("Pre-Homing...")
         while ((self.height is None or self.width is None) 
-               or (self.cartesian_pose_L is None or self.cartesian_pose_R is None) 
-               or time.time() - start < 7
+                or time.time() - start < 2
+                or len(self.proprio_buffer) != self.model.model.obs_horizon):
+            self.pre_home()
+            if self.rate is not None:
+                self.rate.sleep()
+            self.solve_ik()
+            self.update_visualization()
+            super().publish_joint_commands()
+            if i % 300 == 0:
+                self.call_gripper(side = 'left', gripper_state = False, enable = True)
+                rospy.sleep(0.2)
+                self.call_gripper(side = 'right', gripper_state = False, enable = True)
+                i = 0
+            i += 1
+        start = time.time()
+
+        logger.info("Homing...")
+        while ((self.height is None or self.width is None) 
+               or time.time() - start < 4
                or len(self.proprio_buffer) != self.model.model.obs_horizon):
             self.home()
-            if rate is not None:
-                rate.sleep()
+            if self.rate is not None:
+                self.rate.sleep()
             self.solve_ik()
             self.update_visualization()
             
             super().publish_joint_commands()
-            if i % 400 == 0:
+            if i % 300 == 0:
                 self.call_gripper(side = 'left', gripper_state = False, enable = True)
                 rospy.sleep(0.2)
                 self.call_gripper(side = 'right', gripper_state = False, enable = True)
-                logger.info("Waiting for camera topic or robot pose data...")
                 i = 0
             i += 1
         
@@ -240,7 +363,6 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.last_action = None
         while not rospy.is_shutdown():
             assert len(self.proprio_buffer) == self.model.model.obs_horizon
-            # Stack all camera observations
             
             if self.debug_mode:
                 _img_0 = (stacked_obs[-1][0].transpose([1,2,0])*255).astype(onp.uint8)
@@ -277,7 +399,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
                 if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0020:
                     print("blocking with last action")
-                    self._yumi_control(self.last_action, rate)
+                    self._yumi_control(self.last_action)
                     self.last_action = None
                     continue
 
@@ -285,7 +407,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             if self.control_mode == 'receding_horizon_control':
                 if len(self.action_queue) > 0:
                     action = self.action_queue.popleft()
-                    self._yumi_control(action, rate)
+                    self._yumi_control(action)
                     continue
             # end of receding horizon control
 
@@ -310,7 +432,14 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             }
 
             inference_start = time.time()
+            print("input proprio gripper: ", input["proprio"][..., -1])
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
+
+            # debug gripper (Max)
+            # left_gripper = action_prediction[0, :, 9]
+            right_gripper = action_prediction[0, :, -1]
+            print("All right gripper prediction: ", right_gripper)
+            # end debug
 
             print("\nprediction called\n")
             print("Inference time: ", time.time() - inference_start)
@@ -339,6 +468,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
             # # temporal emsemble start
             if self.control_mode == 'temporal_ensemble':
+                if self.skip_every_other_pred:
+                    action_prediction = action_prediction[::3]
                 new_actions = deque(action[self.skip_actions:self.model.model.action_horizon])
                 self.action_queue.append(new_actions)
                 if self.model.model.pred_left_only or self.model.model.pred_right_only:
@@ -371,10 +502,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 action = self.action_queue.popleft()
             
             # update yumi action 
-            self._yumi_control(action, rate)
+            self._yumi_control(action)
             # self._update_action_queue_viz()
     
-    def _yumi_control(self, action, rate = None):
+    def _yumi_control(self, action):
         # YuMi action update
         ######################################################################
         print("action update called")
@@ -392,6 +523,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             # import pdb; pdb.set_trace()
         print("left xyz: ", l_xyz)
         print("left gripper: ", l_gripper_cmd)
+        print("right xyz: ", r_xyz)
+        print("right gripper: ", r_gripper_cmd)
 
         self.left_gripper_signal.value = l_gripper_cmd * 1e3
         self.right_gripper_signal.value = r_gripper_cmd * 1e3
@@ -401,7 +534,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         position=l_xyz,
         wxyz=l_wxyz,
         gripper_state=bool(l_gripper_cmd>self.gripper_thres), 
-        enable=True
+        enable=True if not self.model.model.pred_right_only else False
         )
         
         super().update_target_pose(
@@ -409,7 +542,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         position=r_xyz,
         wxyz=r_wxyz,
         gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
-        enable=True
+        enable= True if not self.model.model.pred_left_only else False
         )
         ######################################################################
         
@@ -417,8 +550,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.update_visualization()
         super().publish_joint_commands()
         
-        if rate is not None:
-            rate.sleep()
+        if self.rate is not None:
+            self.rate.sleep()
     
     def update_curr_proprio(self):
         l_xyz, l_xyzw = tf2xyz_quat(self.cartesian_pose_L)
@@ -702,13 +835,43 @@ def main(
     # ckpt_id: int = 5, 
 
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250319_1715/", 
-    # ckpt_id: int = 299, #Diffusion working on coffee maker
-    
-    ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
-    ckpt_id: int = 30,
+    # ckpt_id: int = 299, #Diffusion working on coffee maker, 6 skip actions  0.5 gripper thres
 
-    collect_data: bool = False,
-    task_name : str = 'move white mug onto black coffee machine'
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250409_2102/", 
+    # ckpt_id: int = 5, # Diffusion 5k on coffee maker not working
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250409_2102_resume/", 
+    # ckpt_id: int = 50, # Diffusion 5k on coffee maker
+
+    # ckpt_path: str = "/mnt/spare-ssd/dpgs_checkpoints/250411_2234", 
+    # ckpt_id: int = 32, # Diffusion EMA 5k on coffee maker
+
+    # ckpt_path: str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1216", 
+    # ckpt_id: int = 49, # Diffusion spatial softmax EMA 1k on coffee maker
+
+    # ckpt_path: str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1216", 
+    # ckpt_id: int = 49, # Diffusion spatial softmax EMA 1k on coffee maker
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1732",
+    # ckpt_id: int = 49, # diffusion subsample 50
+    
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1210",
+    # ckpt_id: int = 49, # diffusion subsample 100
+    
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1003",
+    # ckpt_id: int = 49, # diffusion subsample 200
+    
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209",
+    # ckpt_id: int = 32, # diffusion 5k new coffee maker
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209_resume",
+    ckpt_id: int = 4, # diffusion 5k new coffee maker
+
+    # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
+    # ckpt_id: int = 30, # Simple 1k coffee maker
+
+    collect_data: bool = True,
+    task_name : str = 'move white mug onto black coffee machine simple'
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)

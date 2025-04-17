@@ -1,163 +1,425 @@
-
 import tyro
 import viser
 import viser.extras
 import numpy as np
 import h5py
+import time
+import os
+import glob
 from pathlib import Path
+from typing import Dict, List, Optional
 from yumi_realtime.base import YuMiBaseInterface
-import time 
 
-def names_angles_to_dict(names, angles, idx=0):
-    config = {
-        names[0].decode("utf-8"): angles[idx, 0],
-        names[1].decode("utf-8"): angles[idx, 1],
-        names[2].decode("utf-8"): angles[idx, 2],
-        names[3].decode("utf-8"): angles[idx, 3],
-        names[4].decode("utf-8"): angles[idx, 4],
-        names[5].decode("utf-8"): angles[idx, 5],
-        names[6].decode("utf-8"): angles[idx, 6],
-        names[7].decode("utf-8"): angles[idx, 7],
-        names[8].decode("utf-8"): angles[idx, 8],
-        names[9].decode("utf-8"): angles[idx, 9],
-        names[10].decode("utf-8"): angles[idx, 10],
-        names[11].decode("utf-8"): angles[idx, 11],
-        names[12].decode("utf-8"): angles[idx, 12],
-        names[13].decode("utf-8"): angles[idx, 13],
-        names[14].decode("utf-8"): angles[idx, 14],
-        names[15].decode("utf-8"): angles[idx, 15],
-    }
-    return config
 
-def main(
-    h5_file_path: str = '/home/xi/yumi_realtime/trajectories/data/success/transfer_tiger_241204/robot_trajectory_2024_12_04_18_04_46.h5',
-    ):
-    
-    h5_file_path = Path(h5_file_path)
-    if not h5_file_path.exists():
-        raise FileNotFoundError(f"{h5_file_path} does not exist.")
-    
-    yumi = YuMiBaseInterface(minimal=True)
-    
-    f = h5py.File(h5_file_path, 'r')
-    play=False
-    
-    with yumi.server.gui.add_folder("Controls"):
-        play_button = yumi.server.gui.add_button(label = "Play", icon=viser.Icon.PLAYER_PLAY_FILLED)
-        pause_button = yumi.server.gui.add_button(label = "Pause", icon=viser.Icon.PLAYER_PAUSE_FILLED, visible=False)
-        next_button = yumi.server.gui.add_button(label = "Forward", icon=viser.Icon.ARROW_BIG_RIGHT_FILLED)
-        prev_button = yumi.server.gui.add_button(label = "Back", icon=viser.Icon.ARROW_BIG_LEFT_FILLED)
+class H5TrajectoryViewer:
+    def __init__(self, trajectory_dir: str):
+        self.trajectory_dir = Path(trajectory_dir)
+        if not self.trajectory_dir.exists():
+            raise FileNotFoundError(f"{self.trajectory_dir} does not exist.")
         
-    slider_handle = yumi.server.gui.add_slider(
-        "Data Entry Index", min=0, max=f['state/joint/joint_angle_rad'].shape[0]-1, step=1, initial_value=0
-    )
-    
-    # Observation
-    image_cache = {}
-    viser_img_handles = {}
-    
-    for camera_name in f['observation'].keys():
-        image_cache[camera_name] = f[f'observation/{camera_name}/image/camera_rgb'][:]
+        # Find all H5 files in the directory
+        self.trajectories = self._find_h5_files(self.trajectory_dir)
+        if not self.trajectories:
+            raise ValueError(f"No H5 trajectory files found in {self.trajectory_dir}")
         
-    with yumi.server.gui.add_folder("Observation"):
-        for camera_name in f['observation'].keys():
-            viser_img_handles[camera_name] = yumi.server.gui.add_image(
-                image = image_cache[camera_name][0],
-                label = camera_name
+        # Initialize the YuMi interface
+        self.yumi = YuMiBaseInterface(minimal=True)
+        self.server = self.yumi.server
+        self.play = False
+        
+        # Set the current trajectory to the first one found
+        self.current_trajectory = self.trajectories[0]
+        
+        # Load the H5 file and relevant data
+        self._load_trajectory(self.current_trajectory)
+        
+        # Setup the visualization
+        self._setup_viser_scene()
+        self._setup_viser_gui()
+    
+    def _find_h5_files(self, directory: Path) -> List[Path]:
+        """Find all H5 files in the given directory and subdirectories."""
+        h5_files = []
+        
+        # Look for .h5 files directly in the directory
+        h5_files.extend(list(directory.glob("*.h5")))
+        
+        # Look for .h5 files in subdirectories (single level)
+        for subdir in directory.iterdir():
+            if subdir.is_dir():
+                h5_files.extend(list(subdir.glob("*.h5")))
+        
+        # Sort by name for consistent ordering
+        return sorted(h5_files)
+    
+    def _load_trajectory(self, trajectory_path: Path):
+        """Load data from the specified H5 file."""
+        # Pause playback when loading a new trajectory
+        was_playing = self.play
+        if was_playing:
+            self.play = False
+            if hasattr(self, 'play_button') and hasattr(self, 'pause_button'):
+                self.play_button.visible = True
+                self.pause_button.visible = False
+        
+        # Close any previously opened file
+        if hasattr(self, 'f') and self.f:
+            self.f.close()
+            
+        self.current_trajectory = trajectory_path
+        print(f"Loading trajectory: {trajectory_path}")
+        
+        self.f = h5py.File(trajectory_path, 'r')
+        
+        # Load joint data
+        self.names = self.f['state/joint/joint_name'][:].tolist()[0]    
+        self.angles = self.f['state/joint/joint_angle_rad'][:]
+        self.cartesian = self.f['state/cartesian/cartesian_pose'][:]
+        
+        # Get action data if available
+        self.has_action = 'action' in self.f.keys()
+        if self.has_action:
+            self.cartesian_action = self.f['action/cartesian_pose'][:]
+        
+        # Load camera data - create a new dictionary to avoid modification during iteration
+        new_image_cache = {}
+        for camera_name in self.f['observation'].keys():
+            new_image_cache[camera_name] = self.f[f'observation/{camera_name}/image/camera_rgb'][:]
+        
+        # Safely update the image cache
+        self.image_cache = new_image_cache
+        
+        # Set frame count
+        self.total_frames = self.f['state/joint/joint_angle_rad'].shape[0]
+        
+        # Reset GUI elements if they exist
+        if hasattr(self, 'slider_handle'):
+            # Temporarily disable the slider update callback to prevent race conditions
+            old_callbacks = []
+            if hasattr(self.slider_handle, '_callbacks'):
+                old_callbacks = self.slider_handle._callbacks.copy()
+                self.slider_handle._callbacks = []
+            
+            self.slider_handle.value = 0
+            self.slider_handle.max = self.total_frames - 1
+            
+            # Restore slider callbacks
+            if old_callbacks:
+                self.slider_handle._callbacks = old_callbacks
+        
+        # Update the camera display handles
+        # self._update_camera_handles()
+        
+        # Resume playback if it was previously playing
+        if was_playing:
+            self.play = True
+            if hasattr(self, 'play_button') and hasattr(self, 'pause_button'):
+                self.play_button.visible = False
+                self.pause_button.visible = True
+    
+    def _setup_viser_scene(self):
+        """Setup the viser scene with frames and visualization elements."""
+        # Setup base URDF visualization
+        self.urdf_vis = self.yumi.urdf_vis
+        
+        # Add frames for visualization
+        self.tf_left_frame = self.server.scene.add_frame(
+            "tf_left",
+            axes_length=0.5 * 0.2,
+            axes_radius=0.01 * 0.2,
+            origin_radius=0.1 * 0.2,
+        )
+        
+        self.tf_right_frame = self.server.scene.add_frame(
+            "tf_right",
+            axes_length=0.5 * 0.2,
+            axes_radius=0.01 * 0.2,
+            origin_radius=0.1 * 0.2,
+        )
+        
+        # Add action frames if action data is available
+        if self.has_action:
+            self.tf_left_action_frame = self.server.scene.add_frame(
+                "tf_left_action",
+                axes_length=0.5 * 0.2,
+                axes_radius=0.01 * 0.2,
+                origin_radius=0.1 * 0.2,
+            )
+            self.tf_right_action_frame = self.server.scene.add_frame(
+                "tf_right_action",
+                axes_length=0.5 * 0.2,
+                axes_radius=0.01 * 0.2,
+                origin_radius=0.1 * 0.2,
+            )
+        
+        # Initialize the positions
+        self.tf_left_frame.position = self.cartesian[0, 4:7]
+        self.tf_left_frame.wxyz = self.cartesian[0, 0:4]
+        self.tf_right_frame.position = self.cartesian[0, 11:14]
+        self.tf_right_frame.wxyz = self.cartesian[0, 7:11]
+        
+        if self.has_action:
+            self.tf_left_action_frame.position = self.cartesian_action[0, 4:7]
+            self.tf_left_action_frame.wxyz = self.cartesian_action[0, 0:4]
+            self.tf_right_action_frame.position = self.cartesian_action[0, 11:14]
+            self.tf_right_action_frame.wxyz = self.cartesian_action[0, 7:11]
+        
+        # Initialize the robot configuration
+        initial_config = self.names_angles_to_dict(self.names, self.angles, 0)
+        self.urdf_vis.update_cfg(initial_config)
+    
+    def _setup_viser_gui(self):
+        """Setup the GUI controls for the visualization."""
+        # Trajectory selection dropdown
+        with self.server.gui.add_folder("Trajectory Selection"):
+            # Use full paths as values but only names for display
+            trajectory_names = [str(p.name) for p in self.trajectories]
+            trajectory_paths = [str(p) for p in self.trajectories]
+            
+            # Create a dropdown with full paths as values but only showing filenames
+            self.trajectory_selector = self.server.gui.add_dropdown(
+                "Select Trajectory",
+                options=dict(zip(trajectory_names, trajectory_paths)),
+                initial_value=str(self.current_trajectory)
             )
             
-    # State
-    names = f['state/joint/joint_name'][:].tolist()[0]    
-    angles = f['state/joint/joint_angle_rad'][:]
-    config = names_angles_to_dict(names, angles, 0)
-    cartesian = f['state/cartesian/cartesian_pose'][:]
-
-    # Action
-    if 'action' in f.keys():
-        cartesian_action = f['action/cartesian_pose'][:]
-        
-    yumi.urdf_vis.update_cfg(config)
-    
-    tf_left_frame = yumi.server.scene.add_frame(
-                    "tf_left",
-                    axes_length=0.5 * 0.2,
-                    axes_radius=0.01 * 0.2,
-                    origin_radius=0.1 * 0.2,
-                )
-    
-    tf_right_frame = yumi.server.scene.add_frame(
-                    "tf_right",
-                    axes_length=0.5 * 0.2,
-                    axes_radius=0.01 * 0.2,
-                    origin_radius=0.1 * 0.2,
-                )
-    
-    tf_left_action_frame = yumi.server.scene.add_frame(
-                    "tf_left_action",
-                    axes_length=0.5 * 0.2,
-                    axes_radius=0.01 * 0.2,
-                    origin_radius=0.1 * 0.2,
-                )
-    tf_right_action_frame = yumi.server.scene.add_frame(
-                    "tf_right_action",
-                    axes_length=0.5 * 0.2,
-                    axes_radius=0.01 * 0.2,
-                    origin_radius=0.1 * 0.2,
-                )
-    
-    tf_left_frame.position = cartesian[0, 4:7]
-    tf_left_frame.wxyz = cartesian[0, 0:4]
-    tf_right_frame.position = cartesian[0, 11:14]
-    tf_right_frame.wxyz = cartesian[0, 7:11]
-    
-    @next_button.on_click
-    def _(_) -> None:
-        slider_handle.value += 1
-    
-    @prev_button.on_click
-    def _(_) -> None:
-        slider_handle.value -= 1
-    
-    @slider_handle.on_update
-    def _(_) -> None:
-        config = names_angles_to_dict(names, angles, slider_handle.value)
-        
-        tf_left_frame.position = cartesian[slider_handle.value, 4:7]
-        tf_left_frame.wxyz = cartesian[slider_handle.value, 0:4]
-        tf_right_frame.position = cartesian[slider_handle.value, 11:14]
-        tf_right_frame.wxyz = cartesian[slider_handle.value, 7:11]
-
-        if 'action' in f.keys():
-            tf_left_action_frame.position = cartesian_action[slider_handle.value, 4:7]
-            tf_left_action_frame.wxyz = cartesian_action[slider_handle.value, 0:4]
-            tf_right_action_frame.position = cartesian_action[slider_handle.value, 11:14]
-            tf_right_action_frame.wxyz = cartesian_action[slider_handle.value, 7:11]
-
-        yumi.urdf_vis.update_cfg(config)
-        
-        for camera_name in f['observation'].keys():
-            viser_img_handles[camera_name].image = image_cache[camera_name][slider_handle.value]
-        
-    @play_button.on_click
-    def _(_) -> None:
-        nonlocal play 
-        play = True
-        play_button.visible = False
-        pause_button.visible = True
-    
-    @pause_button.on_click
-    def _(_) -> None:
-        nonlocal play
-        play = False
-        play_button.visible = True
-        pause_button.visible = False
-        
-        
-    while True:
-        if play:
-            slider_handle.value = (slider_handle.value + 1) % f['state/joint/joint_angle_rad'].shape[0]
+            # Add path display
+            self.traj_path_display = self.server.gui.add_text(
+                "Current Path", 
+                f"Path: {self.current_trajectory}"
+            )
             
-        time.sleep(1/15)
+            # Add navigation buttons for trajectories
+            with self.server.gui.add_folder("Navigation"):
+                self.prev_traj_button = self.server.gui.add_button(
+                    label="Previous Trajectory", 
+                    icon=viser.Icon.CHEVRON_LEFT
+                )
+                self.next_traj_button = self.server.gui.add_button(
+                    label="Next Trajectory", 
+                    icon=viser.Icon.CHEVRON_RIGHT
+                )
+                self.trajectory_info = self.server.gui.add_text(
+                    "Info", 
+                    f"Trajectory {self.trajectories.index(self.current_trajectory) + 1} of {len(self.trajectories)}"
+                )
+        
+        # Playback controls
+        with self.server.gui.add_folder("Controls"):
+            self.play_button = self.server.gui.add_button(label="Play", icon=viser.Icon.PLAYER_PLAY_FILLED)
+            self.pause_button = self.server.gui.add_button(label="Pause", icon=viser.Icon.PLAYER_PAUSE_FILLED, visible=False)
+            self.next_button = self.server.gui.add_button(label="Step Forward", icon=viser.Icon.ARROW_BIG_RIGHT_FILLED)
+            self.prev_button = self.server.gui.add_button(label="Step Back", icon=viser.Icon.ARROW_BIG_LEFT_FILLED)
+        
+        # Frame slider
+        self.slider_handle = self.server.gui.add_slider(
+            "Data Entry Index", min=0, max=self.total_frames-1, step=1, initial_value=0
+        )
+        
+        # Initialize image handles collection
+        self.viser_img_handles = {}
+        
+        # Add the camera images
+        self._update_camera_handles()
+        
+        # Add state information
+        with self.server.gui.add_folder("State"):
+            # Add more state information if needed
+            pass
+            
+        # Add action information if available
+        if self.has_action:
+            with self.server.gui.add_folder("Action"):
+                # Add action information if needed
+                pass
+        
+        # Register event handlers
+        @self.trajectory_selector.on_update
+        def _(_) -> None:
+            try:
+                selected_path_str = self.trajectory_selector.value
+                selected_path = Path(selected_path_str)
+                
+                # Only reload if it's a different trajectory
+                if selected_path != self.current_trajectory:
+                    self._load_trajectory(selected_path)
+                    # Update the frame display but inside a try-except to catch potential errors
+                    try:
+                        self._update_frame(0)
+                    except Exception as e:
+                        print(f"Error updating initial frame: {e}")
+                    
+                    # Update trajectory info displays
+                    self.trajectory_info.value = f"Trajectory {self.trajectories.index(self.current_trajectory) + 1} of {len(self.trajectories)}"
+                    self.traj_path_display.value = f"Path: {self.current_trajectory}"
+            except Exception as e:
+                print(f"Error switching trajectories: {e}")
+        
+        @self.prev_traj_button.on_click
+        def _(_) -> None:
+            try:
+                current_idx = self.trajectories.index(self.current_trajectory)
+                # Wrap around to last trajectory if at the beginning
+                new_idx = (current_idx - 1) % len(self.trajectories)
+                new_trajectory = self.trajectories[new_idx]
+                self.trajectory_selector.value = str(new_trajectory)
+            except Exception as e:
+                print(f"Error navigating to previous trajectory: {e}")
+            
+        @self.next_traj_button.on_click
+        def _(_) -> None:
+            try:
+                current_idx = self.trajectories.index(self.current_trajectory)
+                # Wrap around to first trajectory if at the end
+                new_idx = (current_idx + 1) % len(self.trajectories)
+                new_trajectory = self.trajectories[new_idx]
+                self.trajectory_selector.value = str(new_trajectory)
+            except Exception as e:
+                print(f"Error navigating to next trajectory: {e}")
+        
+        @self.next_button.on_click
+        def _(_) -> None:
+            self.slider_handle.value = min(self.slider_handle.value + 1, self.total_frames - 1)
+        
+        @self.prev_button.on_click
+        def _(_) -> None:
+            self.slider_handle.value = max(self.slider_handle.value - 1, 0)
+        
+        @self.play_button.on_click
+        def _(_) -> None:
+            self.play = True
+            self.play_button.visible = False
+            self.pause_button.visible = True
+        
+        @self.pause_button.on_click
+        def _(_) -> None:
+            self.play = False
+            self.play_button.visible = True
+            self.pause_button.visible = False
+        
+        @self.slider_handle.on_update
+        def _(_) -> None:
+            self._update_frame(self.slider_handle.value)
+    
+    def _update_camera_handles(self):
+        """Update the camera handles based on the current image cache."""
+        # Create a safe copy of the keys to avoid modification during iteration
+        current_cameras = list(self.image_cache.keys())
+        
+        # If we don't have image handles yet, create them
+        if not hasattr(self, 'viser_img_handles'):
+            self.viser_img_handles = {}
+        
+        # First, update or create handles for current cameras
+        # print(self.viser_img_handles.keys())
+        for camera_name in current_cameras:
+            if camera_name in self.viser_img_handles:
+                # Update existing handle
+                try:
+                    self.viser_img_handles[camera_name].image = self.image_cache[camera_name][0]
+                except Exception as e:
+                    print(f"Error updating image for camera {camera_name}: {e}")
+            else:
+                # Create new handle if it doesn't exist
+                try:
+                    with self.server.gui.add_folder("Observation", visible=True):
+                        self.viser_img_handles[camera_name] = self.server.gui.add_image(
+                            image=self.image_cache[camera_name][0],
+                            label=camera_name
+                        )
+                except Exception as e:
+                    print(f"Error creating image handle for camera {camera_name}: {e}")
+    
+    def _update_frame(self, frame_idx: int):
+        """Update the visualization based on the current frame index."""
+        try:
+            # Update joint configuration
+            config = self.names_angles_to_dict(self.names, self.angles, frame_idx)
+            self.urdf_vis.update_cfg(config)
+            
+            # Update position frames
+            self.tf_left_frame.position = self.cartesian[frame_idx, 4:7]
+            self.tf_left_frame.wxyz = self.cartesian[frame_idx, 0:4]
+            self.tf_right_frame.position = self.cartesian[frame_idx, 11:14]
+            self.tf_right_frame.wxyz = self.cartesian[frame_idx, 7:11]
+            
+            # Update action frames if available
+            if self.has_action:
+                self.tf_left_action_frame.position = self.cartesian_action[frame_idx, 4:7]
+                self.tf_left_action_frame.wxyz = self.cartesian_action[frame_idx, 0:4]
+                self.tf_right_action_frame.position = self.cartesian_action[frame_idx, 11:14]
+                self.tf_right_action_frame.wxyz = self.cartesian_action[frame_idx, 7:11]
+            
+            # Update camera images - use a copy of the keys to avoid modification during iteration
+            camera_names = list(self.image_cache.keys())
+            for camera_name in camera_names:
+                if camera_name in self.viser_img_handles:
+                    self.viser_img_handles[camera_name].image = self.image_cache[camera_name][frame_idx]
+        except Exception as e:
+            print(f"Error updating frame {frame_idx}: {e}")
+    
+    def names_angles_to_dict(self, names, angles, idx=0):
+        """Convert joint names and angles to a dictionary."""
+        config = {}
+        for i in range(len(names)):
+            config[names[i].decode("utf-8")] = angles[idx, i]
+        return config
+    
+    def run(self):
+        """Run the main visualization loop."""
+        try:
+            print(f"Viewer started with {len(self.trajectories)} trajectories loaded.")
+            print(f"Current trajectory: {self.current_trajectory}")
+            
+            while True:
+                try:
+                    if self.play and hasattr(self, 'slider_handle') and hasattr(self, 'total_frames'):
+                        # Protect against race conditions
+                        if self.total_frames > 0:
+                            new_value = (self.slider_handle.value + 1) % self.total_frames
+                            
+                            # Only update if different (saves callbacks)
+                            if new_value != self.slider_handle.value:
+                                # Temporarily disable callbacks
+                                old_callbacks = []
+                                if hasattr(self.slider_handle, '_callbacks'):
+                                    old_callbacks = self.slider_handle._callbacks.copy()
+                                    self.slider_handle._callbacks = []
+                                
+                                # Update value
+                                self.slider_handle.value = new_value
+                                
+                                # Manually call the update frame function
+                                self._update_frame(new_value)
+                                
+                                # Restore callbacks
+                                if old_callbacks:
+                                    self.slider_handle._callbacks = old_callbacks
+                            time.sleep(0.05)
+                except Exception as e:
+                    print(f"Error in playback loop: {e}")
+                    # If we encounter an error, pause playback to prevent error spam
+                    self.play = False
+                    if hasattr(self, 'play_button') and hasattr(self, 'pause_button'):
+                        self.play_button.visible = True
+                        self.pause_button.visible = False
+                
+
+        except KeyboardInterrupt:
+            print("Visualization stopped by user.")
+        finally:
+            if hasattr(self, 'f') and self.f:
+                self.f.close()
+                print("File resources cleaned up.")
+
+
+def main(
+    trajectory_dir: str = '/home/xi/HDD1/success/yumi_drawer_open_041525_2142',
+):
+    """Main function to launch the trajectory viewer with a directory of H5 files."""
+    viewer = H5TrajectoryViewer(trajectory_dir)
+    viewer.run()
+
 
 if __name__ == "__main__":
     tyro.cli(main)
