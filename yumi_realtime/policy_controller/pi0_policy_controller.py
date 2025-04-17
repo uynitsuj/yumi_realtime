@@ -150,7 +150,6 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             #     self.pre_home()
             #     if self.rate is not None:
             #         self.rate.sleep()
-            #     self.solve_ik()
             #     self.update_visualization()
             #     super().publish_joint_commands()
             #     if i % 300 == 0:
@@ -185,20 +184,6 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
                     i = 0
                 i += 1
 
-            # Prealloc diffusion input tensors
-            # camera_count = len(self.observation_buffers.keys())
-            # self.input_obs_tensor = torch.empty(
-            #     (1, self.model.model.obs_horizon, camera_count, 3, self.height, self.width),
-            #     dtype=torch.float32,
-            #     device='cpu'
-            # )
-
-            # action_dim = len(self.proprio_buffer[0])
-            # self.input_proprio_tensor = torch.empty(
-            #     (1, self.model.model.obs_horizon, action_dim),  # Assuming 20 is the proprio dimension
-            #     dtype=torch.float32,
-            #     device='cpu'
-            # )
             # If we're collecting data, stop recording
             if self.collect_data:
                 try:

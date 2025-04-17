@@ -19,7 +19,9 @@ from collections import deque
 from pathlib import Path
 # dir_path = os.path.dirname(os.path.realpath(__file__))
 # data_dir = os.path.join(dir_path, "../../trajectories/data")
-data_dir = Path("/home/xi/HDD1")
+
+data_dir = Path("/home/xi/HDD1") # TODO: update this path to the correct path
+
 class DataCollector:
     def __init__(
         self,
@@ -57,6 +59,8 @@ class DataCollector:
         
         self.joint_angle_dataset = None
         self.joint_velocity_dataset = None
+        
+        self.total_success_count = None
         
         # Threading lock for file operations
         self.file_lock = Lock()
@@ -443,24 +447,21 @@ class DataCollector:
                 os.path.join(self.success_logdir, self.filename_suffix)
                 rospy.loginfo(f"SUCCESSFUL TRAJECTORY saved to {self.success_logdir}")
         shutil.move(self.filepath, self.success_logdir)
-        
+
+        # Count the total number of successful trajectories
+        try:
+            success_files = [f for f in os.listdir(self.success_logdir) if os.path.isfile(os.path.join(self.success_logdir, f)) and f.startswith('robot_trajectory_') and f.endswith('.h5')]
+            self.total_success_count = len(success_files)
+            rospy.loginfo(f"Total successful trajectories in {self.success_logdir}: {self.total_success_count}")
+        except Exception as e:
+            rospy.logerr(f"Could not count files in success directory: {e}")
+
         return EmptyResponse()
 
     def __del__(self):
         """Cleanup when the node is shut down"""
         self.save_failure(Empty())
-
-if __name__ == '__main__':
-    try:
-        logger = DataCollector(init_node=True)
-        rospy.spin()
-    except Exception as e:
-        print(e)
-        pass
-    finally:
-        if 'logger' in locals():
-            del logger
-            
+        
 def map_egm_joints(data: JointState):
         """Remap EGM joint state order."""
         joints_real = {
@@ -481,3 +482,15 @@ def map_egm_joints(data: JointState):
                 }
         
         return joints_real
+    
+if __name__ == '__main__':
+    try:
+        logger = DataCollector(init_node=True)
+        rospy.spin()
+    except Exception as e:
+        print(e)
+        pass
+    finally:
+        if 'logger' in locals():
+            del logger
+            

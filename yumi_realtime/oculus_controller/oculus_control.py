@@ -14,7 +14,7 @@ from std_srvs.srv import Empty, EmptyResponse
 class YuMiOculusInterface(YuMiROSInterface):
     """YuMi interface with Oculus VR control."""
     
-    def __init__(self, collect_data: bool = False, *args, **kwargs):
+    def __init__(self, collect_data: bool = False, data_collector: DataCollector = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._interactive_handles = False
         
@@ -33,6 +33,9 @@ class YuMiOculusInterface(YuMiROSInterface):
         )
         
         self.collect_data = collect_data
+        if self.collect_data:
+            assert data_collector is not None, "Data collector must be provided if collect_data is True"
+            self.data_collector = data_collector
         self.begin_record = False
         self._saving_data = False
         self._homing = False
@@ -41,6 +44,16 @@ class YuMiOculusInterface(YuMiROSInterface):
                     
         logger.info("VR control interface initialized")
         
+    def _setup_gui(self):
+        
+        super()._setup_gui()
+        if self.collect_data:
+            return
+        with self.server.gui.add_folder("Data"):
+            # Add trajectory count display
+            self.success_count_handle = self.server.gui.add_number("Successes", 0, disabled=True)        
+    
+    
     def _control_l_callback(self, data: VRPolicyAction):
         """Handle left controller updates."""
         l_wxyz = onp.array([
@@ -137,6 +150,10 @@ class YuMiOculusInterface(YuMiROSInterface):
                 self.start_record()
                 rospy.sleep(0.5)
                 self._saving_data = False
+                
+            if self.data_collector.total_success_count is not None: 
+                self.success_count_handle.value = self.data_collector.total_success_count
+    
 
     def home(self):
         if self.noise_home_noise is None:
@@ -183,10 +200,16 @@ class YuMiOculusInterface(YuMiROSInterface):
 
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
-    collect_data : bool = True
+    collect_data : bool = True,
+    task_name: str = 'yumi_drawer_close_041525_2142'
     ): 
     
-    yumi_interface = YuMiOculusInterface(collect_data=collect_data)
+    if collect_data:
+        logger.info("Start data collection service")
+        data_collector = DataCollector(init_node=False, task_name=task_name)
+        yumi_interface._setup_collectors()
+        
+    yumi_interface = YuMiOculusInterface(collect_data=collect_data, data_collector=data_collector)
     
     if "r" in controller: 
         logger.info("Start right controller")
@@ -195,10 +218,7 @@ def main(
         logger.info("Start left controller")
         left_policy = VRPolicy(right_controller=False)
         
-    if collect_data:
-        logger.info("Start data collection service")
-        data_collector = DataCollector(init_node=False, task_name='yumi_drawer_close_041525_2142')
-        yumi_interface._setup_collectors()
+    
     print("Run")
     yumi_interface.run()
     
