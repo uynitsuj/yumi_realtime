@@ -1,3 +1,4 @@
+
 from yumi_realtime.controller import YuMiROSInterface
 from loguru import logger
 import numpy as onp
@@ -89,7 +90,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # self.control_mode = 'receding_horizon_control'
         self.control_mode = 'temporal_ensemble'
         
-        self.skip_actions = 6 # 6 For DP
+        # self.skip_actions = 0 # 6 For DP Sim
+        self.skip_actions = 0 # 6 For DP real
+        # self.skip_actions = 6 # 6 For DP Sim
         # self.skip_actions = 4
         self.skip_every_other_pred = False
         if self.control_mode == 'receding_horizon_control':
@@ -114,7 +117,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # self.gripper_thres = 0.59
         # self.gripper_thres = 0.69
         # self.gripper_thres = 0.5
-        self.gripper_thres = 0.65
+        # self.gripper_thres = 0.65 # sim threshold
+        # self.gripper_thres = 0.0125 # real
+        self.gripper_thres = 0.01 # real
         # self.gripper_thres = 0.75
 
         self.viser_img_handles = {}
@@ -394,11 +399,16 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 # calculate lag 
                 xyz_lag = onp.linalg.norm(target_proprio_left - current_proprio_left)
                 print("lag: ", xyz_lag)
+                print("absolute proprio right gripper: ", input["proprio"][0, -1, 19])
 
                 # if they are in disgreemnt, gripper control with last action 
                 # if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
                 if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper or xyz_lag > 0.0020:
-                    print("blocking with last action")
+                    # print("blocking with last action")
+                    
+                    if target_left_gripper != current_left_gripper or target_right_gripper != current_right_gripper:
+                        print("blocking due to gripper")
+                    
                     self._yumi_control(self.last_action)
                     self.last_action = None
                     continue
@@ -477,8 +487,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.01
-                # k = 0.1
+                # k = 0.01
+                k = 0.05
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
 
@@ -487,8 +497,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
-                # action[9] = action_L[2,-1]
-                # action[19] = action_R[2,-1]
+                # action[9] = action_L[6,-1]
+                if input["proprio"][0, -1, 19] < self.gripper_thres:
+                    action[19] = action_R[-3,-1]
 
                 
             # receding horizon # check the receding horizon block as well
@@ -533,7 +544,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         side='left',
         position=l_xyz,
         wxyz=l_wxyz,
-        gripper_state=bool(l_gripper_cmd>self.gripper_thres), 
+        gripper_state=bool(l_gripper_cmd<self.gripper_thres), 
         enable=True if not self.model.model.pred_right_only else False
         )
         
@@ -541,7 +552,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         side='right',
         position=r_xyz,
         wxyz=r_wxyz,
-        gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
+        gripper_state=bool(r_gripper_cmd<self.gripper_thres), 
         enable= True if not self.model.model.pred_left_only else False
         )
         ######################################################################
@@ -564,7 +575,12 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         r_rot = r_q.as_matrix()
         r_rot_6d = onp.squeeze(rot_mat_to_rot_6d(r_rot[None]), axis=0) # [N, 6]
         
-        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([int(self.gripper_L_pos < 200)]), r_xyz, r_rot_6d, onp.array([int(self.gripper_R_pos) < 200])], axis=-1, dtype=onp.float32)
+        # self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([int(self.gripper_L_pos < 200)]), r_xyz, r_rot_6d, onp.array([int(self.gripper_R_pos) < 200])], axis=-1, dtype=onp.float32) 
+        # For synthetic data TODO: should make it continuous?
+
+        self.cur_proprio = onp.concatenate([l_xyz, l_rot_6d, onp.array([(self.gripper_L_pos/1e4)]), r_xyz, r_rot_6d, onp.array([(self.gripper_R_pos/1e4)])], axis=-1, dtype=onp.float32) 
+        # For real data
+
         assert self.cur_proprio.shape == (20,)
 
         self.proprio_buffer.append(self.cur_proprio)
@@ -864,16 +880,27 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209",
     # ckpt_id: int = 32, # diffusion 5k new coffee maker
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209_resume",
-    ckpt_id: int = 4, # diffusion 5k new coffee maker
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209_resume",
+    # ckpt_id: int = 4, # diffusion 5k new coffee maker
 
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
     # ckpt_id: int = 30, # Simple 1k coffee maker
 
+    # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2027",
+    # ckpt_id: int = 199, # diffusion 150 real coffee maker
+
+    # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2028",
+    # ckpt_id: int = 199, # diffusion 100 real coffee maker
+
+    ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2029",
+    ckpt_id: int = 199, # diffusion 50 real coffee maker
+
     collect_data: bool = True,
-    task_name : str = 'move white mug onto black coffee machine simple'
+    task_name : str = 'move white mug onto black coffee machine'
     ): 
-    
+
+    run_id = os.path.basename(ckpt_path)
+    task_name = task_name + f" {run_id}-{ckpt_id}"
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)
 
     if collect_data:
