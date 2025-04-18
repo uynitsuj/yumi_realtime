@@ -61,7 +61,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_0"
+        self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -886,17 +886,27 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
     # ckpt_id: int = 30, # Simple 1k coffee maker
 
-    # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2027",
-    # ckpt_id: int = 199, # diffusion 150 real coffee maker
+    ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2027",
+    ckpt_id: int = 199, # diffusion 150 real coffee maker
 
     # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2028",
     # ckpt_id: int = 199, # diffusion 100 real coffee maker
 
-    ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2029",
-    ckpt_id: int = 199, # diffusion 50 real coffee maker
+    # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2029",
+    # ckpt_id: int = 199, # diffusion 50 real coffee maker
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1149",
+    # ckpt_id: int = 199, # real drawer 50 
+    
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1148",
+    # ckpt_id: int = 199, # real drawer 100 
+    
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1147",
+    # ckpt_id: int = 199, # real drawer 150 
 
     collect_data: bool = True,
     task_name : str = 'move white mug onto black coffee machine'
+    # task_name : str = 'open the drawer'
     ): 
 
     run_id = os.path.basename(ckpt_path)
