@@ -270,7 +270,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         "gripper_l_joint",
         """
         self.joints = joints
-        self.joints[7:13] = list(self.YUMI_REST_POSE.values())[7:13]
+        # self.joints[7:13] = list(self.YUMI_REST_POSE.values())[7:13] # lock left arm
         
         self.call_gripper("right", joints[-2] < 0.015, enable)
         self.call_gripper("left", joints[-1] < 0.015, enable)
