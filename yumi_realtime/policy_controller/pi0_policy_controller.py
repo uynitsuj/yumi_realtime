@@ -82,8 +82,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # self.cartesian_pose_R = None
         
         # Control mode
-        self.control_mode = 'receding_horizon_control'
-        # self.control_mode = 'temporal_ensemble'
+        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'temporal_ensemble'
         self.skip_every_other_pred = True
         
         self.skip_actions = 0
@@ -781,17 +781,17 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
     # ckpt_id: int = 24000,
 
-    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
-    # ckpt_id: int = 23000,
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
+    ckpt_id: int = 23000,
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k", 
     # ckpt_id: int = 23000, 
 
-    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/pi0_fast_sim_yumi_drawer_50/drawer_50",
-    # ckpt_id: int = 29999, # sim drawer 50
+    # # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/pi0_fast_sim_yumi_drawer_50/drawer_50",
+    # # ckpt_id: int = 29999, # sim drawer 50
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/pi0_fast_sim_yumi_drawer_150/drawer_150",
-    ckpt_id: int = 29999, # sim drawer 150
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/pi0_fast_sim_yumi_drawer_150/drawer_150",
+    # ckpt_id: int = 29999, # sim drawer 150
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_50", 
     # ckpt_id: int = 5000, 
