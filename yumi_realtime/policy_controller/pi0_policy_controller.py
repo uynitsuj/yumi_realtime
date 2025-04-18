@@ -30,7 +30,7 @@ import signal
 class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
     """YuMi controller for pi0 policy control."""
     
-    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, text_prompt: str = None, collect_data: bool = False, debug_mode = False, *args, **kwargs):
+    def __init__(self, ckpt_path: str = None, ckpt_id: int = 0, synthetic_data: bool = False, text_prompt: str = None, collect_data: bool = False, debug_mode = False, *args, **kwargs):
         super().__init__(slider_control=False, *args, **kwargs)
 
         assert ckpt_path is not None, "PI0 Policy checkpoint path must be provided."
@@ -52,7 +52,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.observation_buffers = {}
         self.camera_buffers = {}
         self.camera_topics = [topic[0] for topic in rospy.get_published_topics() if 'sensor_msgs/Image' in topic[1]]
-        
+        self.synthetic_data = synthetic_data
         self.shutting_down = False
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
@@ -390,7 +390,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             }
 
             inference_start = time.time()
-
+            print("Proprio input:", input["proprio"])
             action_prediction = self.model(input) # PI0 inference step
             
             print("\nprediction called\n")
@@ -449,22 +449,26 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.last_action = action
         
         # Map the action to the correct joint order for the robot
-        mapped_action = self._map_action_to_robot_joints(action)
-        
+        if self.synthetic_data:
+            mapped_action = self._map_action_to_robot_joints(action)
+        else:
+            mapped_action = action
+
         # Extract gripper commands
         l_gripper_cmd = mapped_action[15]  # Left gripper is at index 14
         r_gripper_cmd = mapped_action[14]  # Right gripper is at index 15
         # print("left xyz: ", l_xyz)
-        print("left gripper: ", l_gripper_cmd)
+        print("left gripper command: ", l_gripper_cmd)
         # print("right xyz: ", r_xyz)
-        print("right gripper: ", r_gripper_cmd)
+        print("right gripper command: ", r_gripper_cmd)
 
         self.left_gripper_signal.value = l_gripper_cmd * 1e3
         self.right_gripper_signal.value = r_gripper_cmd * 1e3
 
         super().update_target_joints(
         joints=mapped_action,
-        enable=True
+        enable=True,
+        thresh = self.gripper_thres
         )
         
         ######################################################################
@@ -537,27 +541,32 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # Create a new array with the correct order
         self.cur_proprio = onp.zeros(16)
         
-        # Map left arm joints
-        self.cur_proprio[0] = self.joints[7]  # yumi_joint_1_l
-        self.cur_proprio[2] = self.joints[8]  # yumi_joint_2_l
-        self.cur_proprio[4] = self.joints[9]  # yumi_joint_7_l
-        self.cur_proprio[6] = self.joints[10] # yumi_joint_3_l
-        self.cur_proprio[8] = self.joints[11] # yumi_joint_4_l
-        self.cur_proprio[10] = self.joints[12] # yumi_joint_5_l
-        self.cur_proprio[12] = self.joints[13] # yumi_joint_6_l
-        
-        # Map right arm joints
-        self.cur_proprio[1] = self.joints[0]  # yumi_joint_1_r
-        self.cur_proprio[3] = self.joints[1]  # yumi_joint_2_r
-        self.cur_proprio[5] = self.joints[2]  # yumi_joint_7_r
-        self.cur_proprio[7] = self.joints[3]  # yumi_joint_3_r
-        self.cur_proprio[9] = self.joints[4]  # yumi_joint_4_r
-        self.cur_proprio[11] = self.joints[5] # yumi_joint_5_r
-        self.cur_proprio[13] = self.joints[6] # yumi_joint_6_r
-        
-        # Map gripper joints
-        self.cur_proprio[14] = self.joints[15] # gripper_l_joint
-        self.cur_proprio[15] = self.joints[14] # gripper_r_joint
+        # Map left arm joints (Synthetic data)
+        if self.synthetic_data:
+            self.cur_proprio[0] = self.joints[7]  # yumi_joint_1_l
+            self.cur_proprio[2] = self.joints[8]  # yumi_joint_2_l
+            self.cur_proprio[4] = self.joints[9]  # yumi_joint_7_l
+            self.cur_proprio[6] = self.joints[10] # yumi_joint_3_l
+            self.cur_proprio[8] = self.joints[11] # yumi_joint_4_l
+            self.cur_proprio[10] = self.joints[12] # yumi_joint_5_l
+            self.cur_proprio[12] = self.joints[13] # yumi_joint_6_l
+            
+            # Map right arm joints
+            self.cur_proprio[1] = self.joints[0]  # yumi_joint_1_r
+            self.cur_proprio[3] = self.joints[1]  # yumi_joint_2_r
+            self.cur_proprio[5] = self.joints[2]  # yumi_joint_7_r
+            self.cur_proprio[7] = self.joints[3]  # yumi_joint_3_r
+            self.cur_proprio[9] = self.joints[4]  # yumi_joint_4_r
+            self.cur_proprio[11] = self.joints[5] # yumi_joint_5_r
+            self.cur_proprio[13] = self.joints[6] # yumi_joint_6_r
+            
+            # Map gripper joints
+            # self.cur_proprio[14] = self.joints[15] # gripper_l_joint
+            # self.cur_proprio[15] = self.joints[14] # gripper_r_joint
+            self.cur_proprio[14] = int(self.gripper_L_pos)/10000
+            self.cur_proprio[15] = int(self.gripper_R_pos)/10000
+        else:
+            self.cur_proprio = self.joints
         
         assert self.cur_proprio.shape == (16,)
 
@@ -778,11 +787,11 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_50",
     # ckpt_id: int = 23000,
 
-    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
-    # ckpt_id: int = 24000,
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
+    ckpt_id: int = 24000,
 
-    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
-    ckpt_id: int = 23000,
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
+    # ckpt_id: int = 23000,
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k", 
     # ckpt_id: int = 23000, 
@@ -795,14 +804,27 @@ def main(
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_200", 
     # ckpt_id: int = 5000, 
+
+    # # real coffee 50
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_50",
+    # ckpt_id: int = 29999,
+    
+    # # real coffee 100
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_100",
+    # ckpt_id: int = 29999,
+
+    # # real coffee 150
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_150",
+    # ckpt_id: int = 29999,
     
 
     collect_data: bool = False,
     debug_mode: bool = True,
     task_name : str = 'put the white cup on the coffee machine',
+    synthetic_data: bool = True,
     ): 
     
-    yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, task_name, collect_data, debug_mode)
+    yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, synthetic_data, task_name, collect_data, debug_mode)
 
     if collect_data:
         logger.info("Start data collection service")
