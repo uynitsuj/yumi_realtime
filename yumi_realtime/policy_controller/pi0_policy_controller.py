@@ -56,7 +56,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.shutting_down = False
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_1"
+        self.main_camera = "camera_0"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -805,8 +805,8 @@ def main(
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_200", 
     # ckpt_id: int = 5000, 
 
-    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_sim_yumi_led_1k",
-    ckpt_id : int = 29999,
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_sim_yumi_led_1k",
+    # ckpt_id : int = 29999,
 
     # # real coffee 50
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_50",
@@ -819,12 +819,16 @@ def main(
     # # real coffee 150
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_150",
     # ckpt_id: int = 29999,
+
+    # # real drawer 150
+    ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/drawer/real/pi0_fast_real_true_yumi_drawer_150",
+    ckpt_id: int = 29999,
     
 
     collect_data: bool = False,
     debug_mode: bool = True,
     # task_name : str = 'put the white cup on the coffee machine',
-    task_name : str = 'turn the LED light',
+    task_name : str = 'open the drawer',
     synthetic_data: bool = True,
     ): 
     
