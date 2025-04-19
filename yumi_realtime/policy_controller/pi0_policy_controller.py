@@ -787,8 +787,8 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_50",
     # ckpt_id: int = 23000,
 
-    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
-    ckpt_id: int = 24000,
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
+    # ckpt_id: int = 24000,
 
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
     # ckpt_id: int = 23000,
@@ -805,6 +805,9 @@ def main(
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_200", 
     # ckpt_id: int = 5000, 
 
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_sim_yumi_led_1k",
+    ckpt_id : int = 29999,
+
     # # real coffee 50
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_real_yumi_coffee_50",
     # ckpt_id: int = 29999,
@@ -820,7 +823,8 @@ def main(
 
     collect_data: bool = False,
     debug_mode: bool = True,
-    task_name : str = 'put the white cup on the coffee machine',
+    # task_name : str = 'put the white cup on the coffee machine',
+    task_name : str = 'turn the LED light',
     synthetic_data: bool = True,
     ): 
     

@@ -442,13 +442,15 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             }
 
             inference_start = time.time()
-            print("input proprio gripper: ", input["proprio"][..., -1])
+            print("input left proprio gripper: ", input["proprio"][..., 9])
+            # print("input right proprio gripper: ", input["proprio"][..., -1])
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
 
             # debug gripper (Max)
-            # left_gripper = action_prediction[0, :, 9]
-            right_gripper = action_prediction[0, :, -1]
-            print("All right gripper prediction: ", right_gripper)
+            left_gripper = action_prediction[0, :, 9]
+            print("All left gripper prediction: ", left_gripper)
+            # right_gripper = action_prediction[0, :, -1]
+            # print("All right gripper prediction: ", right_gripper)
             # end debug
 
             print("\nprediction called\n")
@@ -488,7 +490,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
                 # k = 0.01
-                k = 0.05
+                # k = 0.05
+                k =0.07
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
 
@@ -500,6 +503,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 # action[9] = action_L[6,-1]
                 if input["proprio"][0, -1, 19] < self.gripper_thres:
                     action[19] = action_R[-3,-1]
+                if input["proprio"][0, -1, 9] > self.gripper_thres:
+                    action[9] = action_L[-6,-1]
 
                 
             # receding horizon # check the receding horizon block as well
@@ -886,8 +891,8 @@ def main(
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
     # ckpt_id: int = 30, # Simple 1k coffee maker
 
-    ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2027",
-    ckpt_id: int = 199, # diffusion 150 real coffee maker
+    # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2027",
+    # ckpt_id: int = 199, # diffusion 150 real coffee maker
 
     # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2028",
     # ckpt_id: int = 199, # diffusion 100 real coffee maker
@@ -895,18 +900,18 @@ def main(
     # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2029",
     # ckpt_id: int = 199, # diffusion 50 real coffee maker
 
-    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1149",
-    # ckpt_id: int = 199, # real drawer 50 
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1149",
+    ckpt_id: int = 199, # real drawer 50 
     
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1148",
     # ckpt_id: int = 199, # real drawer 100 
     
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1147",
-    # ckpt_id: int = 199, # real drawer 150 
+    # ckpt_id: int = 180, # real drawer 150 
 
     collect_data: bool = True,
-    task_name : str = 'move white mug onto black coffee machine'
-    # task_name : str = 'open the drawer'
+    # task_name : str = 'move white mug onto black coffee machine'
+    task_name : str = 'open the drawer'
     ): 
 
     run_id = os.path.basename(ckpt_path)
