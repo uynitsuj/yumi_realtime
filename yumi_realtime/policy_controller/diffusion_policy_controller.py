@@ -542,7 +542,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         position=r_xyz,
         wxyz=r_wxyz,
         gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
-        enable= True if not self.model.model.pred_left_only else False
+        # enable= True if not self.model.model.pred_left_only else False
+        enable = False
         )
         ######################################################################
         
@@ -864,13 +865,23 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209",
     # ckpt_id: int = 32, # diffusion 5k new coffee maker
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209_resume",
-    ckpt_id: int = 4, # diffusion 5k new coffee maker
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250414_1209_resume",
+    # ckpt_id: int = 4, # diffusion 5k new coffee maker
 
     # ckpt_path: str = "/home/xi/checkpoints/yumi_coffee_maker/250408_1442", 
     # ckpt_id: int = 30, # Simple 1k coffee maker
 
-    collect_data: bool = True,
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250419_1208",
+    # ckpt_id: int = 49, # sim LED v2 1k Apr 19
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250418_1711",
+    # ckpt_id: int = 30, # sim faucet v1 1k Apr 19
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250418_2304",
+    ckpt_id: int = 35, # sim tiger bimanual 1k Apr 19
+
+
+    collect_data: bool = False,
     task_name : str = 'move white mug onto black coffee machine simple'
     ): 
     

@@ -116,8 +116,8 @@ if __name__ == '__main__':
         rospy.init_node('multi_camera_publisher')
         
         # Creates two camera publishers
-        camera0 = CameraPublisher(device_id=1, name='camera_0')
-        camera1 = CameraPublisher(device_id=4, name='camera_1')
+        camera0 = CameraPublisher(device_id=0, name='camera_1')
+        camera1 = CameraPublisher(device_id=4, name='camera_0')
         
         camera0.start()
         camera1.start()
