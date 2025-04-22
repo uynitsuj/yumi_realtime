@@ -90,6 +90,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.control_mode = 'temporal_ensemble'
         
         self.skip_actions = 6 # 6 For DP
+        # self.skip_actions = 4 # drawer sim 1k
+        # self.skip_actions = 0
         # self.skip_actions = 4
         self.skip_every_other_pred = False
         if self.control_mode == 'receding_horizon_control':
@@ -113,9 +115,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         # self.gripper_thres = 0.59
         # self.gripper_thres = 0.69
-        # self.gripper_thres = 0.5
-        self.gripper_thres = 0.65
-        # self.gripper_thres = 0.75
+        self.gripper_thres = 0.5
+        # self.gripper_thres = 0.15
+        # self.gripper_thres = 0.90
 
         self.viser_img_handles = {}
 
@@ -436,9 +438,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
             action_prediction = self.model(input) # Denoise action prediction from obs and proprio...
 
             # debug gripper (Max)
-            # left_gripper = action_prediction[0, :, 9]
-            right_gripper = action_prediction[0, :, -1]
-            print("All right gripper prediction: ", right_gripper)
+            left_gripper = action_prediction[0, :, 9]
+            # right_gripper = action_prediction[0, :, -1]
+            print("All left gripper prediction: ", left_gripper)
             # end debug
 
             print("\nprediction called\n")
@@ -477,8 +479,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.01
-                # k = 0.1
+                k = 0.005
+                # k = 0.05
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
 
@@ -542,8 +544,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         position=r_xyz,
         wxyz=r_wxyz,
         gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
-        # enable= True if not self.model.model.pred_left_only else False
-        enable = False
+        enable= True if not self.model.model.pred_left_only else False
         )
         ######################################################################
         
@@ -875,14 +876,36 @@ def main(
     # ckpt_id: int = 49, # sim LED v2 1k Apr 19
 
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250418_1711",
-    # ckpt_id: int = 30, # sim faucet v1 1k Apr 19
+    # ckpt_id: int = 35, # sim faucet v1 1k Apr 19
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250418_2304",
-    ckpt_id: int = 35, # sim tiger bimanual 1k Apr 19
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250418_2304",
+    # ckpt_id: int = 35, # sim tiger bimanual 1k Apr 19
 
+    # ckpt_path: str = "/mnt/spare-ssd/dpgs_checkpoints/250419_1644",
+    # ckpt_id: int = 49, # sim cardboard box lift bimanual 1k Apr 20
+
+    # ckpt_path: str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1253",
+    # ckpt_id: int = 49, # sim drawer 1k Apr 20
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1311",
+    # ckpt_id: int = 49, # sim tiger v3 Apr 20
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1757",
+    # ckpt_id: int = 99, # faucet sim 500 skipped
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1758",
+    ckpt_id: int = 200, # faucet sim 150 # half way finished training
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1759",
+    # ckpt_id: int = 499, # faucet sim 100
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1800",
+    # ckpt_id: int = 499, # faucet sim 50
 
     collect_data: bool = False,
-    task_name : str = 'move white mug onto black coffee machine simple'
+    # task_name : str = 'pick up the cardboard box'
+    # task_name : str = 'open the drawer'
+    task_name : str = 'pick up the tiger'
     ): 
     
     yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)

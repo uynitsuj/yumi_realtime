@@ -309,13 +309,13 @@ class YuMiROSInterface(YuMiBaseInterface):
         """
         
         for side, pose_tf in [('left', self.cartesian_pose_L), ('right', self.cartesian_pose_R)]:
-            if pose_tf.transform.translation.z.item() < 0.1:
+            if pose_tf.transform.translation.z.item() < 0.15:
                 self.update_target_pose(
                     side=side,
                     position=onp.array([
                         pose_tf.transform.translation.x, 
                         pose_tf.transform.translation.y, 
-                        0.2]),
+                        0.25]),
                     wxyz=onp.array([
                         pose_tf.transform.rotation.w,
                         pose_tf.transform.rotation.x,

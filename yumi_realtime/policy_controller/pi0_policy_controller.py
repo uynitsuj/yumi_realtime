@@ -106,7 +106,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             self._setup_collectors()
             self.add_gui_data_collection_controls()
 
-        self.gripper_thres = 0.01
+        self.gripper_thres = 0.005
 
         self.viser_img_handles = {}
 
@@ -414,7 +414,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
                 self.action_queue.append(new_actions)
                 actions_current_timestep = onp.empty((len(self.action_queue), action_prediction.shape[1]))
                 
-                k = 0.01
+                # k = 0.01
+                k = 0.005
 
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
@@ -781,8 +782,8 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_100",
     # ckpt_id: int = 24000,
 
-    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
-    ckpt_id: int = 23000,
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_new_subsample_150",
+    # ckpt_id: int = 23000,
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k", 
     # ckpt_id: int = 23000, 
@@ -801,11 +802,31 @@ def main(
 
     # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/pi0_fast_yumi/pi0_fast_coffee_5k_subsample_200", 
     # ckpt_id: int = 5000, 
+
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_1k/",
+    # ckpt_id: int = 29999, # sim faucet 1k
     
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/bimanual_lift/sim/pi0_fast_sim_yumi_bimanual_lift_v2_1k",
+    # ckpt_id: int = 29999, # sim bimanual lift 1k
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/sim/pi0_fast_sim_yumi_tiger_pick_v2_1k",
+    # ckpt_id: int = 29999, # sim tiger pick 1k
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_150",
+    # ckpt_id: int = 29999, # sim faucet 150
+
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_100",
+    ckpt_id: int = 25000, # sim faucet 100
+
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_50",
+    # ckpt_id: int = 29999, # sim faucet 50
 
     collect_data: bool = False,
     debug_mode: bool = True,
-    task_name : str = 'put the white cup on the coffee machine',
+    # task_name : str = 'put the white cup on the coffee machine',
+    task_name : str = "turn off the faucet",
+    # task_name : str = "pick up the cardboard box",
+    # task_name : str = "pick up the tiger",
     ): 
     
     yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, task_name, collect_data, debug_mode)
