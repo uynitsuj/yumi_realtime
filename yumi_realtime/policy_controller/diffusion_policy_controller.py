@@ -91,7 +91,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         self.control_mode = 'temporal_ensemble'
         
         # self.skip_actions = 0 # 6 For DP Sim
-        self.skip_actions = 0 # 6 For DP real
+        self.skip_actions = 3 # 6 For DP real
         # self.skip_actions = 6 # 6 For DP Sim
         # self.skip_actions = 4
         self.skip_every_other_pred = False
@@ -900,14 +900,21 @@ def main(
     # ckpt_path : str = "/home/xi/checkpoints/yumi_coffee_maker/250416_2029",
     # ckpt_id: int = 199, # diffusion 50 real coffee maker
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1149",
-    ckpt_id: int = 199, # real drawer 50 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1149",
+    # ckpt_id: int = 199, # real drawer 50 
     
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1148",
     # ckpt_id: int = 199, # real drawer 100 
     
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250417_1147",
     # ckpt_id: int = 180, # real drawer 150 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250421_1248",
+    # ckpt_id: int = 199, # real faucet 150
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250421_1249",
+    ckpt_id: int = 199, # real faucet 100
+
 
     collect_data: bool = True,
     # task_name : str = 'move white mug onto black coffee machine'
