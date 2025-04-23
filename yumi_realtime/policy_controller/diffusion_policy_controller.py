@@ -545,6 +545,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         wxyz=r_wxyz,
         gripper_state=bool(r_gripper_cmd>self.gripper_thres), 
         enable= True if not self.model.model.pred_left_only else False
+        # enable=False
         )
         ######################################################################
         
@@ -893,8 +894,8 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1757",
     # ckpt_id: int = 99, # faucet sim 500 skipped
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1758",
-    ckpt_id: int = 200, # faucet sim 150 # half way finished training
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1758",
+    # ckpt_id: int = 200, # faucet sim 150 # half way finished training
 
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1759",
     # ckpt_id: int = 499, # faucet sim 100
@@ -902,6 +903,30 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250420_1800",
     # ckpt_id: int = 499, # faucet sim 50
 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1753",
+    # ckpt_id: int = 349, # drawer sim 150 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1754",
+    # ckpt_id: int = 349, # drawer sim 100 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1755",
+    # ckpt_id: int = 349, # drawer sim 50 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1756",
+    # ckpt_id: int = 349, # lift sim 150 # 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1757",
+    # ckpt_id: int = 349, # lift sim 100 # 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1758",
+    # ckpt_id: int = 349, # lift sim 50 # 
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_0122",
+    # ckpt_id: int = 49, # tiger sim 1k # 
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_2101",
+    ckpt_id: int = 199, # tiger sim 1k # 
+    
     collect_data: bool = False,
     # task_name : str = 'pick up the cardboard box'
     # task_name : str = 'open the drawer'
