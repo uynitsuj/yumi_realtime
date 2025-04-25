@@ -248,7 +248,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
             self.start_egm_control()
             rospy.sleep(1.0)
             
-    def update_target_joints(self, joints: onp.ndarray, enable: bool, thresh: float = 0.01):
+    def update_target_joints(self, joints: onp.ndarray, enable: bool, thresh: float = 0.02):
         """
         Update target joint angles and gripper state
         joints should be in format
@@ -271,7 +271,7 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
         """
         self.joints = joints
         # self.joints[7:13] = list(self.YUMI_REST_POSE.values())[7:13]
-        self.joints[0:7] = list(self.YUMI_REST_POSE.values())[0:7]
+        # self.joints[0:7] = list(self.YUMI_REST_POSE.values())[0:7]
         
         self.call_gripper("right", joints[-2] < thresh, enable)
         self.call_gripper("left", joints[-1] < thresh, enable)

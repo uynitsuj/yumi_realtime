@@ -90,8 +90,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # self.control_mode = 'receding_horizon_control'
         self.control_mode = 'temporal_ensemble'
         
-        # self.skip_actions = 0 # 6 For DP Sim
-        self.skip_actions = 3 # 6 For DP real
+        self.skip_actions = 0 # 6 For DP Sim
+        # self.skip_actions = 3 # 6 For DP real
         # self.skip_actions = 6 # 6 For DP Sim
         # self.skip_actions = 4
         self.skip_every_other_pred = False
@@ -501,10 +501,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
                 # action[9] = action_L[6,-1]
-                if input["proprio"][0, -1, 19] < self.gripper_thres:
-                    action[19] = action_R[-3,-1]
-                if input["proprio"][0, -1, 9] > self.gripper_thres:
-                    action[9] = action_L[-6,-1]
+                # if input["proprio"][0, -1, 19] < self.gripper_thres:
+                #     action[19] = action_R[-3,-1]
+                # if input["proprio"][0, -1, 9] > self.gripper_thres:
+                #     action[9] = action_L[-6,-1]
 
                 
             # receding horizon # check the receding horizon block as well
@@ -912,13 +912,29 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250421_1248",
     # ckpt_id: int = 199, # real faucet 150
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250421_1249",
-    ckpt_id: int = 199, # real faucet 100
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250421_1249",
+    # ckpt_id: int = 199, # real faucet 100
 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_2101",
+    # ckpt_id: int = 199, # tiger real 150
 
-    collect_data: bool = True,
+    # # faucet real 50
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_1449",
+    # ckpt_id : int = 199,
+
+    # # tiger real 150 @300epochs without gripper scaling and increase skip action to 4
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1518",
+    # ckpt_id : int = 299,
+
+    # tiger real 150 @300epochs 
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1721",
+    ckpt_id : int = 399,
+
+    collect_data: bool = False,
     # task_name : str = 'move white mug onto black coffee machine'
-    task_name : str = 'open the drawer'
+    # task_name : str = 'open the drawer'
+    # task_name : str = 'turn off the faucet',
+    task_name : str = 'pick up the tiger',
     ): 
 
     run_id = os.path.basename(ckpt_path)

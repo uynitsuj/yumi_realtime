@@ -56,7 +56,7 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         self.shutting_down = False
         # Initialize a deque for each camera
         self.max_buffer_size = 5  # For storing recent messages to sync from
-        self.main_camera = "camera_0"
+        self.main_camera = "camera_1"
         for idx, topic in enumerate(self.camera_topics):
             camera_name = f"camera_{topic.split('camera_')[1][0]}"
             if camera_name == self.main_camera:
@@ -82,8 +82,9 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # self.cartesian_pose_R = None
         
         # Control mode
-        # self.control_mode = 'receding_horizon_control'
-        self.control_mode = 'temporal_ensemble'
+        self.control_mode = 'receding_horizon_control'
+        # self.control_mode = 'temporal_ensemble'
+        # self.skip_every_other_pred = True
         self.skip_every_other_pred = True
         
         self.skip_actions = 0
@@ -106,7 +107,10 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             self._setup_collectors()
             self.add_gui_data_collection_controls()
 
-        self.gripper_thres = 0.01
+        # self.gripper_thres = 0.01 # drawer
+        self.gripper_thres = 0.022 # 0.021 for tiger sim robot
+        # self.gripper_thres = 0.021 # sim robot
+        # self.gripper_thres = 0.02 # faucet sim
 
         self.viser_img_handles = {}
 
@@ -396,6 +400,10 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             print("\nprediction called\n")
             print("Inference time: ", time.time() - inference_start)
             
+            # gripper prediction 
+            print("left gripper prediction: ", action_prediction[:, -1])
+            print("right gripper prediction: ", action_prediction[:, -2])
+
             if self.breakpt_next_inference:
                 from datetime import datetime
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -821,14 +829,83 @@ def main(
     # ckpt_id: int = 29999,
 
     # # real drawer 150
-    ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/drawer/real/pi0_fast_real_true_yumi_drawer_150",
-    ckpt_id: int = 29999,
+    # ckpt_path: str = "/mnt/spare-ssd/openpi_checkpoints/drawer/real/pi0_fast_real_true_yumi_drawer_150",
+    # ckpt_id: int = 29999,
+
+    # # sim faucet 1k
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_1k",
+    # ckpt_id : int = 29999,
+
+    # # sim faucet 150
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_v1_150",
+    # ckpt_id : int = 29999,
+
+    # # sim faucet 100
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_v1_100_lambda",
+    # ckpt_id : int = 29999,
+
+    # # sim faucet 50
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/sim/pi0_fast_sim_yumi_faucet_v1_50",
+    # ckpt_id : int = 29999,
+
+    # # real faucet 150 
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/real/pi0_fast_real_yumi_faucet_150",
+    # ckpt_id : int = 29999,
     
+
+    # # sim bimanual bin 1k
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/bimanual_lift/sim/pi0_fast_sim_yumi_bimanual_lift_v3_1k",
+    # ckpt_id : int = 29999,
+
+    # # sim bimanual bin 150
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/bimanual_lift/sim/pi0_fast_sim_yumi_bimanual_lift_v3_150",
+    # ckpt_id : int = 29999,
+
+    # # sim bimanual bin 100
+
+    # # sim bimanual bin 50
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/bimanual_lift/sim/pi0_fast_sim_yumi_bimanual_lift_v3_50",
+    # ckpt_id : int = 29999,
+
+    # # sim drawer 1k
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/drawer/sim/pi0_fast_sim_yumi_drawer_v4_1k",
+    # ckpt_id : int =  29999,
+
+    # # sim drawer 100
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/drawer/sim/pi0_fast_sim_yumi_drawer_v4_100",
+    # ckpt_id : int =  29999,
+
+    # # real drawer 100
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/faucet/real/pi0_fast_real_yumi_faucet_100",
+    # ckpt_id : int =  29999,
+
+    # # sim drawer 150 
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/drawer/sim/pi0_fast_sim_yumi_drawer_v4_150",
+    # ckpt_id : int = 29999,
+
+    # # sim drawer 50 
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/drawer/sim/pi0_fast_sim_yumi_drawer_v4_50",
+    # ckpt_id : int = 29999,
+
+    # sim tiger 1k v5 
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/sim/pi0_fast_sim_yumi_tiger_v5_1k", 
+    ckpt_id : int = 29999,
+
+    # # sim bimanual lift 100
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/bimanual_lift/sim/pi0_fast_sim_yumi_bimanual_lift_v3_100", 
+    # ckpt_id : int = 29999,
+
+    # # real tiger 150 lambda change synthetic_data=False
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/real/pi0_fast_real_yumi_tiger_150",
+    # ckpt_id: int = 29999,
 
     collect_data: bool = False,
     debug_mode: bool = True,
     # task_name : str = 'put the white cup on the coffee machine',
-    task_name : str = 'open the drawer',
+    # task_name : str = 'open the drawer',
+    # task_name : str = 'turn off the faucet',
+    # task_name : str = 'pick up the cardboard box',
+    task_name : str = 'pick up the tiger',
     synthetic_data: bool = True,
     ): 
     

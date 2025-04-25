@@ -414,7 +414,7 @@ class H5TrajectoryViewer:
 
 
 def main(
-    trajectory_dir: str = '/home/xi/HDD1/success/yumi_drawer_open_041525_2142',
+    trajectory_dir: str = '/mnt/hard-drive/success/yumi_tiger_pick_042125_2347',
 ):
     """Main function to launch the trajectory viewer with a directory of H5 files."""
     viewer = H5TrajectoryViewer(trajectory_dir)
