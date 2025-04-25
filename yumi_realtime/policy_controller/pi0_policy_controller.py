@@ -824,9 +824,9 @@ def main(
     collect_data: bool = False,
     debug_mode: bool = True,
     # task_name : str = 'put the white cup on the coffee machine',
-    task_name : str = "turn off the faucet",
+    # task_name : str = "turn off the faucet",
     # task_name : str = "pick up the cardboard box",
-    # task_name : str = "pick up the tiger",
+    task_name : str = "pick up the tiger",
     ): 
     
     yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, task_name, collect_data, debug_mode)

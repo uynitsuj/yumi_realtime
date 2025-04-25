@@ -115,8 +115,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         # self.gripper_thres = 0.59
         # self.gripper_thres = 0.69
-        self.gripper_thres = 0.5
-        # self.gripper_thres = 0.15
+        # self.gripper_thres = 0.5
+        self.gripper_thres = 0.3
         # self.gripper_thres = 0.90
 
         self.viser_img_handles = {}
@@ -479,8 +479,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                k = 0.005
-                # k = 0.05
+                # k = 0.005
+                # k = 0.5
+                k = 0.7
+                # k = 1.0
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
 
@@ -489,8 +491,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
-                # action[9] = action_L[2,-1]
-                # action[19] = action_R[2,-1]
+                action[9] = action_L[-4,-1]
+                action[19] = action_R[-4,-1]
 
                 
             # receding horizon # check the receding horizon block as well
@@ -537,6 +539,7 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         wxyz=l_wxyz,
         gripper_state=bool(l_gripper_cmd>self.gripper_thres), 
         enable=True if not self.model.model.pred_right_only else False
+        # enable=False
         )
         
         super().update_target_pose(
@@ -924,8 +927,11 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_0122",
     # ckpt_id: int = 49, # tiger sim 1k # 
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_2101",
-    ckpt_id: int = 199, # tiger sim 1k # 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_2101",
+    # ckpt_id: int = 199, # tiger sim 1k # 
+
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_2237",
+    ckpt_id: int = 80, # tiger sim 1k v5#
     
     collect_data: bool = False,
     # task_name : str = 'pick up the cardboard box'
