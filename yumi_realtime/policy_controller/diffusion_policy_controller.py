@@ -926,9 +926,13 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1518",
     # ckpt_id : int = 299,
 
-    # tiger real 150 @300epochs 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1721",
-    ckpt_id : int = 399,
+    # # tiger real 150 @300epochs 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1721",
+    # ckpt_id : int = 399,
+
+    # tiger real v2 160 @ 200 
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250425_0146",
+    ckpt_id : int = 199,
 
     collect_data: bool = False,
     # task_name : str = 'move white mug onto black coffee machine'
