@@ -116,8 +116,8 @@ class YuMiJointAngleBaseInterface:
             lower,
             upper,
         ) in self.urdf_vis.get_actuated_joint_limits().items():
-            lower = lower if lower is not None else -np.pi
-            upper = upper if upper is not None else np.pi
+            lower = lower if lower is not None else -onp.pi
+            upper = upper if upper is not None else onp.pi
             initial_pos = self.YUMI_REST_POSE[joint_name]
             slider = self.server.gui.add_slider(
                 label=joint_name,

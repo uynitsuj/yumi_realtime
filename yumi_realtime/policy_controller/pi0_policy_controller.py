@@ -82,10 +82,10 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # self.cartesian_pose_R = None
         
         # Control mode
-        self.control_mode = 'receding_horizon_control'
-        # self.control_mode = 'temporal_ensemble'
+        # self.control_mode = 'receding_horizon_control'
+        self.control_mode = 'temporal_ensemble'
         # self.skip_every_other_pred = True
-        self.skip_every_other_pred = True
+        self.skip_every_other_pred = False
         
         self.skip_actions = 0
         if self.control_mode == 'receding_horizon_control':
@@ -107,8 +107,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             self._setup_collectors()
             self.add_gui_data_collection_controls()
 
-        # self.gripper_thres = 0.01 # drawer
-        self.gripper_thres = 0.022 # 0.021 for tiger sim robot
+        self.gripper_thres = 0.02 # drawer
+        # self.gripper_thres = 0.023 # 0.021 for tiger sim robot
         # self.gripper_thres = 0.021 # sim robot
         # self.gripper_thres = 0.02 # faucet sim
 
@@ -401,8 +401,12 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             print("Inference time: ", time.time() - inference_start)
             
             # gripper prediction 
-            print("left gripper prediction: ", action_prediction[:, -1])
-            print("right gripper prediction: ", action_prediction[:, -2])
+            if self.synthetic_data:
+                print("left gripper prediction: ", action_prediction[:, -2])
+                print("right gripper prediction: ", action_prediction[:, -1])
+            else:
+                print("left gripper prediction: ", action_prediction[:, -1])
+                print("right gripper prediction: ", action_prediction[:, -2])
 
             if self.breakpt_next_inference:
                 from datetime import datetime
@@ -418,11 +422,17 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             if self.control_mode == 'temporal_ensemble':
                 if self.skip_every_other_pred:
                     action_prediction = action_prediction[::2]
+                
+                # tiger picking hack
+                action_prediction[:, -2] = onp.where(action_prediction[:, -2] > self.gripper_thres, action_prediction[:, -2], onp.zeros_like(action_prediction[:, -2]))
+                action_prediction[:, -1] = onp.where(action_prediction[:, -1] > self.gripper_thres, action_prediction[:, -1], onp.zeros_like(action_prediction[:, -1]))
+
                 new_actions = deque(action_prediction[self.skip_actions:len(action_prediction)])
                 self.action_queue.append(new_actions)
                 actions_current_timestep = onp.empty((len(self.action_queue), action_prediction.shape[1]))
                 
-                k = 0.01
+                # k = 0.01
+                k = 1.0
 
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
@@ -432,6 +442,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
 
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
+
+
                 
             # receding horizon # check the receding horizon block as well
             if self.control_mode == 'receding_horizon_control':
@@ -573,10 +585,16 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
             # self.cur_proprio[15] = self.joints[14] # gripper_r_joint
             self.cur_proprio[14] = int(self.gripper_L_pos)/10000
             self.cur_proprio[15] = int(self.gripper_R_pos)/10000
+            if self.gripper_L_pos < self.gripper_thres:
+                self.cur_proprio[14] = 0.002
+            if self.gripper_R_pos < self.gripper_thres:
+                self.cur_proprio[15] = 0.002
         else:
             self.cur_proprio = self.joints
         
         assert self.cur_proprio.shape == (16,)
+
+
 
         self.proprio_buffer.append(self.cur_proprio)
 

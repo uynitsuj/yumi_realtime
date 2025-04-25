@@ -220,7 +220,9 @@ class YuMiJointAngleROSInterface(YuMiJointAngleBaseInterface):
                         self.gripper_L_pos = int(gripper_msg_L.value) if gripper_msg_L.value != '' else self.gripper_L_pos
                         self.gripper_R_pos = int(gripper_msg_R.value) if gripper_msg_R.value != '' else self.gripper_R_pos
                         return 0
-                assert type(self.gripper_L_pos) == int and type(self.gripper_R_pos) == int
+                assert type(self.gripper_L_pos) == int and type(self.gripper_R_pos) == int, "Gripper positions must be integers"
+                assert self.gripper_L_pos >= 0 and self.gripper_R_pos >= 0, "Gripper positions must be positive"
+
                 
                 # Update real robot visualization     
                 self.urdf_vis_real.update_cfg(joints_real)

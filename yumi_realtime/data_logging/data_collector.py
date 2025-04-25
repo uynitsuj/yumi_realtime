@@ -20,7 +20,7 @@ from pathlib import Path
 # dir_path = os.path.dirname(os.path.realpath(__file__))
 # data_dir = os.path.join(dir_path, "../../trajectories/data")
 
-data_dir = Path("/home/xi/HDD1") # TODO: update this path to the correct path
+data_dir = Path("/mnt/hard-drive/") # TODO: update this path to the correct path
 
 class DataCollector:
     def __init__(

@@ -198,7 +198,7 @@ class YuMiOculusInterface(YuMiROSInterface):
 def main(
     controller : Literal["r", "l", "rl"] = "rl", # left and right controller
     collect_data : bool = True,
-    task_name: str = 'yumi_bin_lift_041626_2347'
+    task_name: str = 'yumi_bimanual_lift_250424_2212'
     ): 
     
         
