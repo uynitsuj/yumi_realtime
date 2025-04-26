@@ -84,8 +84,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
         # Control mode
         # self.control_mode = 'receding_horizon_control'
         self.control_mode = 'temporal_ensemble'
-        # self.skip_every_other_pred = True
-        self.skip_every_other_pred = False
+        self.skip_every_other_pred = True
+        # self.skip_every_other_pred = False
         
         self.skip_actions = 0
         if self.control_mode == 'receding_horizon_control':
@@ -432,7 +432,8 @@ class YuMiPI0PolicyController(YuMiJointAngleROSInterface):
                 actions_current_timestep = onp.empty((len(self.action_queue), action_prediction.shape[1]))
                 
                 # k = 0.01
-                k = 1.0
+                k = 0.05
+                # k = 1.0
 
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
@@ -905,8 +906,16 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/drawer/sim/pi0_fast_sim_yumi_drawer_v4_50",
     # ckpt_id : int = 29999,
 
-    # sim tiger 1k v5 
-    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/sim/pi0_fast_sim_yumi_tiger_v5_1k", 
+    # # sim tiger 1k v5 
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/sim/pi0_fast_sim_yumi_tiger_v5_1k", 
+    # ckpt_id : int = 29999,
+
+    # # real tiger 160 v2
+    # ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/real/pi0_fast_real_yumi_tiger_pick_combined_160",
+    # ckpt_id : int = 29999, # real tiger pick 160
+
+    # real bimnual lift v1 150
+    ckpt_path : str = "/mnt/spare-ssd/openpi_checkpoints/tiger/sim/pi0_fast_real_yumi_bimanual_lift_150",
     ckpt_id : int = 29999,
 
     # # sim bimanual lift 100
@@ -922,9 +931,9 @@ def main(
     # task_name : str = 'put the white cup on the coffee machine',
     # task_name : str = 'open the drawer',
     # task_name : str = 'turn off the faucet',
-    # task_name : str = 'pick up the cardboard box',
-    task_name : str = 'pick up the tiger',
-    synthetic_data: bool = True,
+    task_name : str = 'pick up the cardboard box',
+    # task_name : str = 'pick up the tiger',
+    synthetic_data: bool = False,
     ): 
     
     yumi_interface = YuMiPI0PolicyController(ckpt_path, ckpt_id, synthetic_data, task_name, collect_data, debug_mode)

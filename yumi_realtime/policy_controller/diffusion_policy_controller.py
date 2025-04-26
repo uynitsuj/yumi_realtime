@@ -930,15 +930,20 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_1721",
     # ckpt_id : int = 399,
 
-    # tiger real v2 160 @ 200 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250425_0146",
+    # # tiger real v2 160 @ 200 
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250425_0146",
+    # ckpt_id : int = 199,
+
+    # bimanual box lift real 150 @ 200 
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250425_0203",
     ckpt_id : int = 199,
 
     collect_data: bool = False,
     # task_name : str = 'move white mug onto black coffee machine'
     # task_name : str = 'open the drawer'
     # task_name : str = 'turn off the faucet',
-    task_name : str = 'pick up the tiger',
+    # task_name : str = 'pick up the tiger',
+    task_name : str = 'pick up the cardboard box',
     ): 
 
     run_id = os.path.basename(ckpt_path)
