@@ -89,8 +89,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
         # self.control_mode = 'receding_horizon_control'
         self.control_mode = 'temporal_ensemble'
         
-        self.skip_actions = 6 # 6 For DP
-        # self.skip_actions = 4 # drawer sim 1k
+        # self.skip_actions = 6 # 6 For DP
+        self.skip_actions = 4 # drawer sim 1k
         # self.skip_actions = 0
         # self.skip_actions = 4
         self.skip_every_other_pred = False
@@ -115,8 +115,9 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
         # self.gripper_thres = 0.59
         # self.gripper_thres = 0.69
-        # self.gripper_thres = 0.5
-        self.gripper_thres = 0.3
+        self.gripper_thres = 0.5
+        # self.gripper_thres = 0.8
+
         # self.gripper_thres = 0.90
 
         self.viser_img_handles = {}
@@ -479,9 +480,10 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
                 else:
                     actions_current_timestep = onp.empty((len(self.action_queue), self.model.model.action_dim))
                 
-                # k = 0.005
+                k = 0.01
                 # k = 0.5
-                k = 0.7
+                # k = 0.05
+                # k = 0.7
                 # k = 1.0
                 for i, q in enumerate(self.action_queue):
                     actions_current_timestep[i] = q.popleft()
@@ -491,8 +493,8 @@ class YuMiDiffusionPolicyController(YuMiROSInterface):
 
                 action = (actions_current_timestep * exp_weights[:, None]).sum(axis=0)
                 self.temporal_ensemble_action = action
-                action[9] = action_L[-4,-1]
-                action[19] = action_R[-4,-1]
+                # action[9] = action_L[-4,-1]
+                # action[19] = action_R[-4,-1]
 
                 
             # receding horizon # check the receding horizon block as well
@@ -930,16 +932,28 @@ def main(
     # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250422_2101",
     # ckpt_id: int = 199, # tiger sim 1k # 
 
-    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_2237",
-    ckpt_id: int = 80, # tiger sim 1k v5#
-    
-    collect_data: bool = False,
-    # task_name : str = 'pick up the cardboard box'
-    # task_name : str = 'open the drawer'
-    task_name : str = 'pick up the tiger'
+    ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250425_2259",
+    ckpt_id : int = 149, # bimanual lift 1k v4
+
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250423_2237",
+    # ckpt_id: int = 80, # tiger sim 1k v5#
+
+    # # tiger left arm only
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250426_2002",
+    # ckpt_id : int = 49,
+
+    # tiger left arm only
+    # ckpt_path : str = "/mnt/spare-ssd/dpgs_checkpoints/250427_0329",
+    # ckpt_id : int = 149,
+
+    collect_data: bool = True,
+    task_name : str = 'pick_up_the_cardboard_box_042725',
+    # task_name : str = 'open the drawer',
+    # task_name : str = 'pick up the tiger',
+    debug_mode: bool = False
     ): 
     
-    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data)
+    yumi_interface = YuMiDiffusionPolicyController(ckpt_path, ckpt_id, collect_data, debug_mode)
 
     if collect_data:
         logger.info("Start data collection service")
