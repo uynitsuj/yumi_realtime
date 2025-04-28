@@ -6,6 +6,7 @@ import h5py
 import time
 import os
 import glob
+import cv2
 from pathlib import Path
 from typing import Dict, List, Optional
 from yumi_realtime.base import YuMiBaseInterface
@@ -233,6 +234,20 @@ class H5TrajectoryViewer:
                 # Add action information if needed
                 pass
         
+        # Add a new folder for video export functionality
+        with self.server.gui.add_folder("Export Video"):
+            self.resolution_scale = self.server.gui.add_dropdown(
+                "Resolution Scale",
+                options=("Original (1x)", "Half (1/2)", "Quarter (1/4)", "Eighth (1/8)"),
+                initial_value="Original (1x)"
+            )
+            self.fps_selector = self.server.gui.add_number("FPS", 24, min=1, max=60, step=1)
+            self.save_video_button = self.server.gui.add_button(
+                label="Save Cameras to MP4", 
+                icon=viser.Icon.VIDEO
+            )
+            self.video_status = self.server.gui.add_text("Status", "Status: Ready")
+        
         # Register event handlers
         @self.trajectory_selector.on_update
         def _(_) -> None:
@@ -300,7 +315,19 @@ class H5TrajectoryViewer:
         @self.slider_handle.on_update
         def _(_) -> None:
             self._update_frame(self.slider_handle.value)
-    
+        
+        @self.save_video_button.on_click
+        def _(_) -> None:
+            if self.resolution_scale.value == "Original (1x)":
+                scale = 1
+            elif self.resolution_scale.value == "Half (1/2)":
+                scale = 2
+            elif self.resolution_scale.value == "Quarter (1/4)":
+                scale = 4
+            elif self.resolution_scale.value == "Eighth (1/8)":
+                scale = 8
+            self.save_cameras_to_mp4(scale_factor=scale, fps=self.fps_selector.value)
+            
     def _update_camera_handles(self):
         """Update the camera handles based on the current image cache."""
         # Create a safe copy of the keys to avoid modification during iteration
@@ -365,6 +392,78 @@ class H5TrajectoryViewer:
             config[names[i].decode("utf-8")] = angles[idx, i]
         return config
     
+    def save_cameras_to_mp4(self, scale_factor=1, fps=24.0):
+        """Save camera frames to MP4 videos with optional resolution scaling."""
+        try:
+            self.video_status.value = "Status: Saving videos..."
+            
+            # Create a descriptive name for the video file
+            trajectory_name = self.current_trajectory.stem
+            
+            # Make sure we have images to save
+            if not hasattr(self, 'image_cache') or not self.image_cache:
+                self.video_status.value = "Status: No images to save!"
+                return
+            
+            # Get a list of camera names
+            camera_names = list(self.image_cache.keys())
+            if not camera_names:
+                self.video_status.value = "Status: No cameras found!"
+                return
+            
+            # Create output directory if it doesn't exist
+            output_dir = self.current_trajectory.parent / "exported_videos"
+            os.makedirs(output_dir, exist_ok=True)
+            
+            saved_files = []
+            
+            # Process each camera
+            for camera_name in camera_names:
+                # Get frames for this camera
+                frames = self.image_cache[camera_name]
+                if frames.shape[0] == 0:
+                    continue
+                
+                # Get original dimensions
+                height, width, channels = frames[0].shape
+                
+                # Calculate new dimensions based on scale factor
+                new_width = width // scale_factor
+                new_height = height // scale_factor
+                
+                # Create output filename
+                output_file = f"{trajectory_name}_{camera_name}_scale{scale_factor}x.mp4"
+                output_path = os.path.join(output_dir, output_file)
+                
+                # Initialize video writer
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Use 'mp4v' codec
+                video_writer = cv2.VideoWriter(output_path, fourcc, fps, (new_width, new_height))
+                
+                # Write frames to video
+                for frame in frames:
+                    # Resize the frame if needed
+                    if scale_factor > 1:
+                        frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+                    
+                    # OpenCV uses BGR format, but our frames are likely RGB
+                    bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    video_writer.write(bgr_frame)
+                
+                # Release video writer
+                video_writer.release()
+                saved_files.append(output_path)
+                
+                print(f"Saved video to {output_path}")
+            
+            if saved_files:
+                self.video_status.value = f"Status: Saved {len(saved_files)} videos to {output_dir}"
+            else:
+                self.video_status.value = "Status: No videos were saved"
+                
+        except Exception as e:
+            self.video_status.value = f"Status: Error - {str(e)}"
+            print(f"Error saving videos: {e}")
+    
     def run(self):
         """Run the main visualization loop."""
         try:
@@ -414,7 +513,7 @@ class H5TrajectoryViewer:
 
 
 def main(
-    trajectory_dir: str = '/mnt/hard-drive/success/open_the_drawer_042725',
+    trajectory_dir: str = '/mnt/hard-drive/success/pick_up_the_tiger_042725',
 ):
     """Main function to launch the trajectory viewer with a directory of H5 files."""
     viewer = H5TrajectoryViewer(trajectory_dir)
