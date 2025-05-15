@@ -8,8 +8,8 @@ Available control interfaces include:
 1. Interactive Viser Interface (Draggable End-Effector Frames)
 2. Meta Quest Oculus VR Tele-operation control
 3. [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/)
-4. [Physical Intelligence PI0-FAST]([https://diffusion-policy.cs.columbia.edu/](https://www.physicalintelligence.company/research/fast))
-5. [NVIDIA Isaac-GR00T]([https://diffusion-policy.cs.columbia.edu/](https://developer.nvidia.com/isaac/gr00t))
+4. [Physical Intelligence PI0-FAST](https://diffusion-policy.cs.columbia.edu/](https://www.physicalintelligence.company/research/fast)
+5. [NVIDIA Isaac-GR00T](https://diffusion-policy.cs.columbia.edu/](https://developer.nvidia.com/isaac/gr00t)
 
 ![DiffusionPolicy](data/media/DiffusionPolicyHandoffYuMi.gif)
 Diffusion Policy autonomously performing a handoff trained from 70 expert demonstrations
