@@ -32,4 +32,3 @@ After a successful install, read the [usage instructions](USAGE_GUIDE.md).
 - [x] Implement [Diffusion Policy](https://diffusion-policy.cs.columbia.edu/) Controller
 - [x] Implement [NVIDIA Isaac-GR00T](https://developer.nvidia.com/isaac/gr00t) Policy Controller
 - [x] Implement [Physical Intelligence π0](https://www.physicalintelligence.company/blog/pi0) Policy Controller
-- [ ] Debug frame twitching in visualization
