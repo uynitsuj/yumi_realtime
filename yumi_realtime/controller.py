@@ -19,6 +19,7 @@ from controller_manager_msgs.srv import SwitchController
 from abb_egm_msgs.msg import EGMState
 from std_srvs.srv import Empty
 from yumi_realtime.data_logging.data_collector import DataCollector
+from copy import deepcopy
 
 class YuMiROSInterface(YuMiBaseInterface):
     """YuMi interface with ROS integration."""
@@ -122,7 +123,7 @@ class YuMiROSInterface(YuMiBaseInterface):
         """Setup opqaue visualization of real robot state."""
         self.urdf_vis_real = viser.extras.ViserUrdf(
             self.server, 
-            self.urdf, 
+            deepcopy(self.urdf), 
             root_node_name="/base_real",
             mesh_color_override=(0.65, 0.5, 0.5)
         )
