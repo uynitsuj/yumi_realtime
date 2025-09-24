@@ -2,7 +2,7 @@
 
 A collection of realtime control interfaces for the bi-manual ABB YuMi IRB14000 robot arm using Robot Web Services (RWS) and Externally Guided Motion (EGM) low-level control.
 
-Differential IK solving handled by the [pyroki](https://github.com/chungmin99/pyroki.git) library developed by [Chung-Min Kim](https://chungmin99.github.io/)! 
+Differentiable IK solving handled by the [pyroki](https://github.com/chungmin99/pyroki.git) library developed by [Chung-Min Kim](https://chungmin99.github.io/)! 
 
 Available control interfaces include:
 1. Interactive Viser Interface (Draggable End-Effector Frames)
